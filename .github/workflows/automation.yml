@@ -89,6 +89,11 @@ jobs:
     name: Auto Assign Issues and PRs
     runs-on: ubuntu-latest
     if: github.event_name == 'issues' || github.event_name == 'pull_request'
+    env:
+      BACKEND_MAINTAINER: ${{ secrets.BACKEND_MAINTAINER }}
+      FRONTEND_MAINTAINER: ${{ secrets.FRONTEND_MAINTAINER }}
+      DEVOPS_MAINTAINER: ${{ secrets.DEVOPS_MAINTAINER }}
+      SECURITY_MAINTAINER: ${{ secrets.SECURITY_MAINTAINER }}
 
     steps:
     - name: Auto assign based on labels
@@ -98,31 +103,44 @@ jobs:
           const labels = context.payload[context.eventName].labels.map(label => label.name);
           const assignees = [];
           
+          // Define assignee mappings - use actual GitHub usernames
+          // These can be configured via repository secrets or environment variables
+          const assigneeMappings = {
+            'backend': process.env.BACKEND_MAINTAINER || 'argakiig', // Default to repo owner
+            'frontend': process.env.FRONTEND_MAINTAINER || 'argakiig',
+            'devops': process.env.DEVOPS_MAINTAINER || 'argakiig',
+            'security': process.env.SECURITY_MAINTAINER || 'argakiig'
+          };
+          
           // Assign based on labels
-          if (labels.includes('backend')) {
-            assignees.push('backend-maintainer');
-          }
-          if (labels.includes('frontend')) {
-            assignees.push('frontend-maintainer');
-          }
-          if (labels.includes('devops')) {
-            assignees.push('devops-maintainer');
-          }
-          if (labels.includes('security')) {
-            assignees.push('security-team');
+          for (const label of labels) {
+            if (assigneeMappings[label]) {
+              assignees.push(assigneeMappings[label]);
+            }
           }
           
-          // Add assignees if not already assigned
-          const currentAssignees = context.payload[context.eventName].assignees.map(assignee => assignee.login);
-          const newAssignees = assignees.filter(assignee => !currentAssignees.includes(assignee));
-          
-          if (newAssignees.length > 0) {
-            await github.rest.issues.addAssignees({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              assignees: newAssignees
-            });
+          // Only proceed if we have valid assignees
+          if (assignees.length > 0) {
+            // Add assignees if not already assigned
+            const currentAssignees = context.payload[context.eventName].assignees.map(assignee => assignee.login);
+            const newAssignees = assignees.filter(assignee => !currentAssignees.includes(assignee));
+            
+            if (newAssignees.length > 0) {
+              try {
+                await github.rest.issues.addAssignees({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  assignees: newAssignees
+                });
+                console.log(`Successfully assigned: ${newAssignees.join(', ')}`);
+              } catch (error) {
+                console.log(`Failed to assign users: ${error.message}`);
+                console.log('This might be because the users are not valid GitHub usernames or do not have access to this repository.');
+              }
+            }
+          } else {
+            console.log('No valid assignees found for the current labels.');
           }
 
   stale-issues:
