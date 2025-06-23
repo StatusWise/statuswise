@@ -11,8 +11,14 @@ export default function PublicStatus() {
 
   useEffect(() => {
     if (!projectId) return
+    const allowedProjectIds = ['project1', 'project2', 'project3']; // Example allow-list
+    if (!allowedProjectIds.includes(projectId)) {
+      console.error('Invalid projectId:', projectId);
+      return;
+    }
     axios.get(`${process.env.NEXT_PUBLIC_API_URL}/public/${projectId}`)
       .then(res => setIncidents(res.data))
+      .catch(err => console.error('Error fetching incidents:', err));
   }, [projectId])
 
   return (
