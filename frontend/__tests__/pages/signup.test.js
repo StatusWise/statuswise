@@ -26,48 +26,69 @@ describe('Signup Page', () => {
     render(<Signup />)
     expect(screen.getByText('Signup')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Email')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Password')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Password (min 6 characters)')).toBeInTheDocument()
     expect(screen.getByText('Create Account')).toBeInTheDocument()
   })
 
-  test('shows error for empty fields', async () => {
+  test('shows validation error for empty email on form submission', async () => {
     render(<Signup />)
-    const signupButton = screen.getByText('Create Account')
-    
-    fireEvent.click(signupButton)
-    
-    await waitFor(() => {
-      expect(screen.getByText('Email and password are required')).toBeInTheDocument()
-    })
-  })
-
-  test('shows error for empty email', async () => {
-    render(<Signup />)
-    const passwordInput = screen.getByPlaceholderText('Password')
     const signupButton = screen.getByText('Create Account')
     
     await act(async () => {
-      await userEvent.type(passwordInput, 'password123')
+      fireEvent.click(signupButton)
     })
-    fireEvent.click(signupButton)
     
     await waitFor(() => {
-      expect(screen.getByText('Email and password are required')).toBeInTheDocument()
+      expect(screen.getByText('Email is required')).toBeInTheDocument()
     })
   })
 
-  test('shows error for empty password', async () => {
+  test('shows validation error for empty password on form submission', async () => {
     render(<Signup />)
     const emailInput = screen.getByPlaceholderText('Email')
     const signupButton = screen.getByText('Create Account')
     
     await act(async () => {
       await userEvent.type(emailInput, 'test@example.com')
+      fireEvent.click(signupButton)
     })
-    fireEvent.click(signupButton)
     
     await waitFor(() => {
-      expect(screen.getByText('Email and password are required')).toBeInTheDocument()
+      expect(screen.getByText('Password is required')).toBeInTheDocument()
+    })
+  })
+
+  test('shows validation error for invalid email format', async () => {
+    render(<Signup />)
+    const emailInput = screen.getByPlaceholderText('Email')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
+    const signupButton = screen.getByText('Create Account')
+    
+    await act(async () => {
+      await userEvent.type(emailInput, 'invalid-email')
+      await userEvent.type(passwordInput, 'password123')
+      fireEvent.click(signupButton)
+    })
+    
+    await waitFor(() => {
+      expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument()
+    })
+  })
+
+  test('shows validation error for short password', async () => {
+    render(<Signup />)
+    const emailInput = screen.getByPlaceholderText('Email')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
+    const signupButton = screen.getByText('Create Account')
+    
+    await act(async () => {
+      await userEvent.type(emailInput, 'test@example.com')
+      await userEvent.type(passwordInput, '123')
+      fireEvent.click(signupButton)
+    })
+    
+    await waitFor(() => {
+      expect(screen.getByText('Password must be at least 6 characters long')).toBeInTheDocument()
     })
   })
 
@@ -76,18 +97,18 @@ describe('Signup Page', () => {
     
     render(<Signup />)
     const emailInput = screen.getByPlaceholderText('Email')
-    const passwordInput = screen.getByPlaceholderText('Password')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
     const signupButton = screen.getByText('Create Account')
     
     await act(async () => {
       await userEvent.type(emailInput, 'test@example.com')
       await userEvent.type(passwordInput, 'password123')
+      fireEvent.click(signupButton)
     })
-    fireEvent.click(signupButton)
     
     await waitFor(() => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
-        'http://localhost:8000/signup',
+        expect.stringContaining('/signup'),
         { email: 'test@example.com', password: 'password123' }
       )
     })
@@ -104,38 +125,47 @@ describe('Signup Page', () => {
     
     render(<Signup />)
     const emailInput = screen.getByPlaceholderText('Email')
-    const passwordInput = screen.getByPlaceholderText('Password')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
     const signupButton = screen.getByText('Create Account')
     
     await act(async () => {
       await userEvent.type(emailInput, 'existing@example.com')
       await userEvent.type(passwordInput, 'password123')
+      fireEvent.click(signupButton)
     })
-    fireEvent.click(signupButton)
     
     await waitFor(() => {
       expect(screen.getByText('User with this email already exists. Please try logging in instead.')).toBeInTheDocument()
     })
   })
 
-  test('handles invalid email error', async () => {
+  test('handles backend validation errors (422)', async () => {
     mockedAxios.post.mockRejectedValueOnce({
-      response: { status: 422 }
+      response: { 
+        status: 422,
+        data: {
+          detail: [
+            { loc: ['body', 'email'], msg: 'Invalid email format' },
+            { loc: ['body', 'password'], msg: 'Password too short' }
+          ]
+        }
+      }
     })
     
     render(<Signup />)
     const emailInput = screen.getByPlaceholderText('Email')
-    const passwordInput = screen.getByPlaceholderText('Password')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
     const signupButton = screen.getByText('Create Account')
     
     await act(async () => {
-      await userEvent.type(emailInput, 'invalid-email')
+      await userEvent.type(emailInput, 'test@example.com')
       await userEvent.type(passwordInput, 'password123')
+      fireEvent.click(signupButton)
     })
-    fireEvent.click(signupButton)
     
     await waitFor(() => {
-      expect(screen.getByText('Invalid email format. Please enter a valid email address.')).toBeInTheDocument()
+      expect(screen.getByText('Invalid email format')).toBeInTheDocument()
+      expect(screen.getByText('Password too short')).toBeInTheDocument()
     })
   })
 
@@ -146,14 +176,14 @@ describe('Signup Page', () => {
     
     render(<Signup />)
     const emailInput = screen.getByPlaceholderText('Email')
-    const passwordInput = screen.getByPlaceholderText('Password')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
     const signupButton = screen.getByText('Create Account')
     
     await act(async () => {
       await userEvent.type(emailInput, 'test@example.com')
       await userEvent.type(passwordInput, 'password123')
+      fireEvent.click(signupButton)
     })
-    fireEvent.click(signupButton)
     
     await waitFor(() => {
       expect(screen.getByText('Network error. Please check your connection and try again.')).toBeInTheDocument()
@@ -165,14 +195,14 @@ describe('Signup Page', () => {
     
     render(<Signup />)
     const emailInput = screen.getByPlaceholderText('Email')
-    const passwordInput = screen.getByPlaceholderText('Password')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
     const signupButton = screen.getByText('Create Account')
     
     await act(async () => {
       await userEvent.type(emailInput, 'test@example.com')
       await userEvent.type(passwordInput, 'password123')
+      fireEvent.click(signupButton)
     })
-    fireEvent.click(signupButton)
     
     await waitFor(() => {
       expect(screen.getByText('Creating Account...')).toBeInTheDocument()
@@ -190,80 +220,103 @@ describe('Signup Page', () => {
     })
   })
 
-  test('trims whitespace from email', async () => {
+  test('trims and lowercases email on submission', async () => {
     mockedAxios.post.mockResolvedValueOnce({ data: { email: 'test@example.com' } })
     
     render(<Signup />)
     const emailInput = screen.getByPlaceholderText('Email')
-    const passwordInput = screen.getByPlaceholderText('Password')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
     const signupButton = screen.getByText('Create Account')
     
     await act(async () => {
-      await userEvent.type(emailInput, '  test@example.com  ')
+      await userEvent.type(emailInput, '  TEST@EXAMPLE.COM  ')
       await userEvent.type(passwordInput, 'password123')
-    })
-    await act(async () => {
       fireEvent.click(signupButton)
     })
     
     await waitFor(() => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
-        'http://localhost:8000/signup',
+        expect.stringContaining('/signup'),
         { email: 'test@example.com', password: 'password123' }
       )
     })
   })
 
-  test('shows error on invalid email format (422)', async () => {
-    axios.post.mockRejectedValue({ response: { status: 422 } })
+  test('handles server error (500)', async () => {
+    mockedAxios.post.mockRejectedValue({ response: { status: 500 } })
+    
     render(<Signup />)
-    fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'invalid' } })
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'password' } })
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
-    expect(await screen.findByText('Invalid email format. Please enter a valid email address.')).toBeInTheDocument()
+    const emailInput = screen.getByPlaceholderText('Email')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
+    const signupButton = screen.getByText('Create Account')
+    
+    await act(async () => {
+      await userEvent.type(emailInput, 'test@example.com')
+      await userEvent.type(passwordInput, 'password123')
+      fireEvent.click(signupButton)
+    })
+    
+    await waitFor(() => {
+      expect(screen.getByText('Server error. Please try again later.')).toBeInTheDocument()
+    })
   })
 
-  test('shows error on duplicate user (400)', async () => {
-    axios.post.mockRejectedValue({ response: { status: 400 } })
+  test('handles generic error', async () => {
+    mockedAxios.post.mockRejectedValue({})
+    
     render(<Signup />)
-    fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'test@example.com' } })
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'password' } })
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
-    expect(await screen.findByText('User with this email already exists. Please try logging in instead.')).toBeInTheDocument()
+    const emailInput = screen.getByPlaceholderText('Email')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
+    const signupButton = screen.getByText('Create Account')
+    
+    await act(async () => {
+      await userEvent.type(emailInput, 'test@example.com')
+      await userEvent.type(passwordInput, 'password123')
+      fireEvent.click(signupButton)
+    })
+    
+    await waitFor(() => {
+      expect(screen.getByText('Signup failed. Please try again.')).toBeInTheDocument()
+    })
   })
 
-  test('shows error on server error (500)', async () => {
-    axios.post.mockRejectedValue({ response: { status: 500 } })
+  test('supports form submission with Enter key', async () => {
+    mockedAxios.post.mockResolvedValueOnce({ data: { email: 'test@example.com' } })
+    
     render(<Signup />)
-    fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'test@example.com' } })
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'password' } })
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
-    expect(await screen.findByText('Server error. Please try again later.')).toBeInTheDocument()
+    const emailInput = screen.getByPlaceholderText('Email')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
+    
+    await act(async () => {
+      await userEvent.type(emailInput, 'test@example.com')
+      await userEvent.type(passwordInput, 'password123')
+      // Press Enter on the password field to submit
+      await userEvent.keyboard('{Enter}')
+    })
+    
+    await waitFor(() => {
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/signup'),
+        { email: 'test@example.com', password: 'password123' }
+      )
+    })
   })
 
-  test('shows error on network error', async () => {
-    axios.post.mockRejectedValue({ code: 'NETWORK_ERROR' })
+  test('shows field-specific validation styling', async () => {
     render(<Signup />)
-    fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'test@example.com' } })
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'password' } })
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
-    expect(await screen.findByText('Network error. Please check your connection and try again.')).toBeInTheDocument()
-  })
-
-  test('shows error on generic error', async () => {
-    axios.post.mockRejectedValue({})
-    render(<Signup />)
-    fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'test@example.com' } })
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'password' } })
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
-    expect(await screen.findByText('Signup failed. Please try again.')).toBeInTheDocument()
-  })
-
-  test('navigates to login page when clicking login button', () => {
-    render(<Signup />)
-    const loginButton = screen.getByText(/already have an account\? login/i)
-    fireEvent.click(loginButton)
-    // The router mock is in jest.setup.js
-    // This will call router.push('/login')
+    const emailInput = screen.getByPlaceholderText('Email')
+    const passwordInput = screen.getByPlaceholderText('Password (min 6 characters)')
+    const signupButton = screen.getByText('Create Account')
+    
+    await act(async () => {
+      await userEvent.type(emailInput, 'invalid')
+      await userEvent.type(passwordInput, '123')
+      fireEvent.click(signupButton)
+    })
+    
+    await waitFor(() => {
+      expect(emailInput).toHaveClass('border-red-500')
+      expect(passwordInput).toHaveClass('border-red-500')
+    })
   })
 }) 
