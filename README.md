@@ -81,7 +81,6 @@ A high-level overview of the repository structure:
 ├── backend/        # FastAPI backend application
 ├── docs/           # Project and workflow documentation
 ├── frontend/       # Next.js frontend application
-├── scripts/        # Utility and automation scripts
 ├── .github/        # GitHub Actions workflows
 ├── docker-compose.yml
 └── README.md

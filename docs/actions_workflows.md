@@ -1,18 +1,19 @@
 # GitHub Actions Workflows
 
-This document provides a comprehensive overview of the GitHub Actions workflows used in the StatusWise project. These workflows automate everything from testing and code quality to dependency management and deployment.
+This document provides a comprehensive overview of the GitHub Actions workflows used in the StatusWise project. These workflows automate everything from testing and code quality to deployment and release management.
 
 ## 📋 Workflow Overview
 
-Our CI/CD and automation processes are managed by the following seven workflows:
+Our CI/CD and automation processes are managed by the following six workflows:
 
 1.  **`ci.yml` (CI/CD Pipeline)**: The core pipeline for continuous integration. It runs tests and linters for both the frontend and backend on every push and pull request to provide fast feedback.
 2.  **`code-quality.yml` (Code Quality)**: Performs a deeper static analysis of the codebase, including linting checks that are not covered in the main CI pipeline.
 3.  **`test-environments.yml` (Test Environments)**: A comprehensive test suite that validates the application across a matrix of different Python, Node.js, and database versions. To save resources, this workflow is triggered manually on pull requests by adding a specific label.
 4.  **`automation.yml` (Automation)**: Handles project management and repository automation tasks, such as auto-labeling issues and pull requests, auto-assigning reviewers, and checking for stale issues.
-5.  **`dependencies.yml` (Dependency Management)**: Manages the project's dependencies, including checking for outdated packages and scanning for security vulnerabilities.
-6.  **`deploy.yml` (Deployment)**: Manages the deployment of the application to different environments.
-7.  **`release.yml` (Release Management)**: Automates the process of creating new releases when a version tag is pushed.
+5.  **`deploy.yml` (Deployment)**: Manages the deployment of the application to different environments.
+6.  **`release.yml` (Release Management)**: Automates the process of creating new releases when a version tag is pushed.
+
+**Note**: Dependency management is now handled by [Dependabot](https://docs.github.com/en/code-security/dependabot), which automatically creates pull requests for dependency updates.
 
 ---
 
@@ -90,17 +91,7 @@ Creating a new release is a manual process that triggers the `release.yml` workf
     *   `auto-label`: Automatically adds labels to issues and PRs based on their content and file paths.
     *   `auto-assign`: Automatically assigns team members based on labels.
     *   `stale-issues`: Marks and closes stale issues and PRs after a period of inactivity.
-    *   `dependency-updates`: Checks for outdated dependencies and creates/updates a tracking issue.
     *   `pr-checks`: Adds a comment to pull requests with a quality checklist.
-
-### `dependencies.yml`
-
-*   **Purpose**: Dependency lifecycle management.
-*   **Triggers**: `schedule` (weekly), `workflow_dispatch` (manual).
-*   **Jobs**:
-    *   `update-python-dependencies`: Checks for outdated Python packages.
-    *   `update-node-dependencies`: Checks for outdated Node.js packages.
-    *   `security-scan`: Scans for vulnerabilities in both frontend and backend dependencies.
 
 ### `deploy.yml`
 
