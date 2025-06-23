@@ -144,7 +144,7 @@ jobs:
     - name: Check Python dependencies
       run: |
         cd backend
-        pip install pip-check-updates
+        pip install --upgrade pip-check-updates
         pcu > python-updates.txt || echo "No updates available" > python-updates.txt
 
     - name: Check Node.js dependencies
