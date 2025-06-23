@@ -118,6 +118,31 @@ The following secrets may be required for the workflows to run successfully. The
 *   `CODECOV_TOKEN`: Required for uploading test coverage reports to Codecov.
 *   `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`: Required if you are pushing images to Docker Hub in the `deploy.yml` workflow.
 
+### Auto-Assign Configuration
+
+The `automation.yml` workflow includes auto-assignment functionality that can automatically assign team members to issues and pull requests based on labels. To configure this:
+
+*   `BACKEND_MAINTAINER`: GitHub username for backend-related issues/PRs
+*   `FRONTEND_MAINTAINER`: GitHub username for frontend-related issues/PRs  
+*   `DEVOPS_MAINTAINER`: GitHub username for devops/infrastructure-related issues/PRs
+*   `SECURITY_MAINTAINER`: GitHub username for security-related issues/PRs
+
+**Note**: If these secrets are not configured, the workflow will default to assigning the repository owner (`argakiig`). Make sure the configured usernames have access to the repository.
+
+#### Setting Up Auto-Assign Secrets
+
+1. Go to your repository's "Settings" > "Secrets and variables" > "Actions"
+2. Click "New repository secret" for each maintainer role
+3. Add the following secrets with actual GitHub usernames:
+   - `BACKEND_MAINTAINER`: Username for backend issues
+   - `FRONTEND_MAINTAINER`: Username for frontend issues  
+   - `DEVOPS_MAINTAINER`: Username for devops/infrastructure issues
+   - `SECURITY_MAINTAINER`: Username for security issues
+
+**Example**: If your backend maintainer's GitHub username is `john-doe`, set `BACKEND_MAINTAINER` to `john-doe`.
+
+The auto-assign functionality will now work when issues or PRs are labeled with `backend`, `frontend`, `devops`, or `security`.
+
 ## 📊 Monitoring and Notifications
 
 ### Built-in Notifications
