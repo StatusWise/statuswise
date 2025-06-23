@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]
+    types: [labeled]
   schedule:
     - cron: '0 6 * * 0'  # Weekly on Sunday at 6 AM UTC
 
@@ -15,6 +15,10 @@ concurrency:
 jobs:
   test-python-versions:
     name: Test Python Versions
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'run-compat-tests')
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -62,6 +66,10 @@ jobs:
 
   test-node-versions:
     name: Test Node.js Versions
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'run-compat-tests')
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -92,6 +100,10 @@ jobs:
 
   test-database-versions:
     name: Test Database Versions
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'run-compat-tests')
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -138,6 +150,10 @@ jobs:
 
   test-docker-compose:
     name: Test Docker Compose
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'run-compat-tests')
     runs-on: ubuntu-latest
 
     steps:
