@@ -1,0 +1,6 @@
+p, user, project:own, read
+p, user, project:own, write  
+p, user, project:own, delete
+p, user, incident:own, read
+p, user, incident:own, write
+p, user, incident:own, delete 

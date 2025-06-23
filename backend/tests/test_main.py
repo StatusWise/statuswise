@@ -64,6 +64,12 @@ def clean_database():
 @pytest.fixture
 def test_user():
     db = TestingSessionLocal()
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.email == "test@example.com").first()
+    if existing_user:
+        db.close()
+        return existing_user
+    
     user = User(
         email="test@example.com", 
         hashed_password=get_password_hash("testpassword"),

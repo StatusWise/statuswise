@@ -371,7 +371,7 @@ class TestProjectAccess:
         assert response.status_code == 401
     
     def test_list_project_incidents_not_owner(self, test_user, auth_headers):
-        """Test listing incidents for project not owned by user - currently no access control"""
+        """Test listing incidents for project not owned by user"""
         # Create another user and their project
         db = TestingSessionLocal()
         other_user = User(
@@ -389,22 +389,22 @@ class TestProjectAccess:
         project_id = project.id
         db.close()
         
-        # TODO: API should return 403, but currently has no access control
+        # API now properly returns 403 with access control
         response = client.get(f"/projects/{project_id}/incidents", headers=auth_headers)
-        assert response.status_code == 200  # No access control implemented
-        assert response.json() == []  # Empty list since no incidents
+        assert response.status_code == 403
+        assert "Access denied" in response.json()["detail"]
     
     def test_list_project_incidents_nonexistent_project(self, test_user, auth_headers):
-        """Test listing incidents for nonexistent project - currently no validation"""
+        """Test listing incidents for nonexistent project"""
         response = client.get("/projects/999/incidents", headers=auth_headers)
-        # TODO: API should return 404, but currently has no project validation
-        assert response.status_code == 200  # No project validation implemented
-        assert response.json() == []  # Empty list since no incidents
+        # API now properly returns 404 with project validation
+        assert response.status_code == 404
+        assert "Project not found" in response.json()["detail"]
 
 
 class TestIncidentAccess:
     def test_resolve_incident_not_owner(self, test_user, auth_headers):
-        """Test resolving incident for project not owned by user - currently no access control"""
+        """Test resolving incident for project not owned by user"""
         # Create another user and their project/incident
         db = TestingSessionLocal()
         other_user = User(
@@ -431,17 +431,17 @@ class TestIncidentAccess:
         incident_id = incident.id
         db.close()
         
-        # TODO: API should return 403, but currently has no access control
+        # API now properly returns 403 with access control
         response = client.post(f"/incidents/{incident_id}/resolve", headers=auth_headers)
-        assert response.status_code == 200  # No access control implemented
-        assert response.json()["resolved"] is True
+        assert response.status_code == 403
+        assert "Access denied" in response.json()["detail"]
     
     def test_list_incidents_for_nonexistent_project(self, test_user, auth_headers):
-        """Test listing incidents for nonexistent project - currently no validation"""
+        """Test listing incidents for nonexistent project"""
         response = client.get("/incidents/999", headers=auth_headers)
-        # TODO: API should return 404, but currently has no project validation
-        assert response.status_code == 200  # No project validation implemented
-        assert response.json() == []  # Empty list since no incidents
+        # API now properly returns 404 with project validation
+        assert response.status_code == 404
+        assert "Project not found" in response.json()["detail"]
     
     def test_list_incidents_not_owner(self, test_user, auth_headers):
         """Test listing incidents for project not owned by user"""
@@ -463,7 +463,7 @@ class TestIncidentAccess:
         
         response = client.get(f"/incidents/{project.id}", headers=auth_headers)
         assert response.status_code == 403
-        assert "access this project" in response.json()["detail"]
+        assert "Access denied" in response.json()["detail"]
 
 
 class TestErrorHandling:
@@ -509,4 +509,4 @@ class TestErrorHandling:
             headers=auth_headers,
         )
         assert response.status_code == 403
-        assert "access this project" in response.json()["detail"] 
+        assert "Access denied" in response.json()["detail"] 
