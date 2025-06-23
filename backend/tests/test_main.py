@@ -326,6 +326,13 @@ class TestPublicAPI:
         data = response.json()
         assert len(data) == 0
 
+    def test_public_incidents_nonexistent_project(self):
+        # Test with a project ID that doesn't exist
+        response = client.get("/public/999")
+        assert response.status_code == 404
+        data = response.json()
+        assert data["detail"] == "Project not found"
+
 
 class TestValidation:
     def test_project_name_validation(self, test_user, auth_headers):

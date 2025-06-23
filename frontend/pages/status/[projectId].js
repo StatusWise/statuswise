@@ -8,12 +8,46 @@ export default function PublicStatus() {
   const router = useRouter()
   const { projectId } = router.query
   const [incidents, setIncidents] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!projectId) return
+    
+    setLoading(true)
+    setError(null)
+    
     axios.get(`${process.env.NEXT_PUBLIC_API_URL}/public/${projectId}`)
-      .then(res => setIncidents(res.data))
+      .then(res => {
+        setIncidents(res.data)
+        setLoading(false)
+      })
+      .catch(err => {
+        console.error('Error fetching incidents:', err)
+        setError(err.response?.data?.message || 'Failed to load incidents')
+        setLoading(false)
+      })
   }, [projectId])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen p-10 bg-white">
+        <div className="max-w-xl mx-auto bg-white p-6 rounded shadow">
+          <div className="text-center">Loading...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen p-10 bg-white">
+        <div className="max-w-xl mx-auto bg-white p-6 rounded shadow">
+          <div className="text-red-600 text-center">{error}</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen p-10 bg-white">

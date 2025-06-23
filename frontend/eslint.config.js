@@ -2,10 +2,23 @@ import js from '@eslint/js';
 import reactPlugin from 'eslint-plugin-react';
 
 export default [
+  // Global ignores
+  {
+    ignores: [
+      'coverage/**',
+      '.next/**',
+      'node_modules/**',
+      'out/**',
+      'dist/**',
+      'build/**',
+      '*.min.js',
+      '*.bundle.js',
+      '*.chunk.js'
+    ]
+  },
   js.configs.recommended,
   {
     files: ['**/*.{js,jsx}'],
-    ignores: ['coverage/**'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -40,7 +53,6 @@ export default [
   },
   {
     files: ['**/*.test.js', '**/*.test.jsx', 'jest.config.js', 'jest.setup.js'],
-    ignores: ['coverage/**'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
