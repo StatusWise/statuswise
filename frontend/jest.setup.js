@@ -3,6 +3,9 @@ import '@testing-library/jest-dom'
 // Mock window.alert
 global.alert = jest.fn()
 
+// Mock React 18 concurrent features to avoid act() warnings
+global.IS_REACT_ACT_ENVIRONMENT = true
+
 // Mock Next.js router
 jest.mock('next/router', () => ({
   useRouter() {
