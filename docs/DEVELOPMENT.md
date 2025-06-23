@@ -85,24 +85,30 @@ make dev-frontend # Frontend only
 ### 2. Before Committing
 
 ```bash
+# Fix any linting issues
+make lint-fix
+
 # Full check before committing
 make full-check
 ```
 
 This runs:
-- Code formatting
-- Linting
+- Code formatting and linting fixes
+- Linting checks
 - All tests with proper isolation
 - Coverage analysis
 
 ### 3. Specific Development Tasks
 
 ```bash
-# Format code
-make format
+# Fix linting issues automatically
+make lint-fix
 
-# Lint code
+# Check linting (without fixing)
 make lint
+
+# Format code (alias for lint-fix)
+make format
 
 # Run security scan
 make security-scan

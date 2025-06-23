@@ -1,7 +1,7 @@
 # StatusWise Project Makefile
 # Provides commands for development, testing, and deployment
 
-.PHONY: help install test test-backend test-frontend lint lint-backend lint-frontend format clean coverage dev dev-backend dev-frontend build deploy docker-build docker-run
+.PHONY: help install test test-backend test-frontend lint lint-backend lint-frontend lint-fix lint-fix-backend lint-fix-frontend convert-console format clean coverage dev dev-backend dev-frontend build deploy docker-build docker-run
 
 # Default target
 help: ## Show this help message
@@ -65,13 +65,36 @@ lint-backend: ## Lint backend code
 lint-frontend: ## Lint frontend code
 	cd frontend && npm run lint
 
-format: ## Format all code
-	@echo "🎨 Formatting backend code..."
+lint-fix: lint-fix-backend lint-fix-frontend ## Fix all linting issues automatically
+
+lint-fix-backend: ## Fix backend linting issues automatically
+	@echo "🔧 Fixing backend linting issues..."
 	cd backend && black .
 	cd backend && isort .
-	@echo "🎨 Formatting frontend code..."
-	cd frontend && npm run lint:fix || true
-	@echo "✅ Code formatted!"
+	@echo "✅ Backend linting fixed!"
+
+lint-fix-frontend: ## Fix frontend linting issues automatically
+	@echo "🔧 Fixing frontend linting issues..."
+	@cd frontend && npm run lint -- --fix || true
+	@echo "✅ Frontend linting auto-fix complete!"
+	@echo "💡 Run 'make lint-frontend' to check for remaining issues"
+
+convert-console: ## Convert console statements to logger (development-only logging)
+	@echo "🔄 Converting console statements to development-only logger..."
+	@cd frontend && find pages utils components -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" 2>/dev/null | \
+	xargs sed -i.bak \
+		-e 's/console\.log(/logger.log(/g' \
+		-e 's/console\.error(/logger.error(/g' \
+		-e 's/console\.warn(/logger.warn(/g' \
+		-e 's/console\.info(/logger.info(/g' \
+		-e 's/console\.debug(/logger.debug(/g' || true
+	@cd frontend && find pages utils components -name "*.bak" -delete 2>/dev/null || true
+	@echo "✅ Console statements converted to logger!"
+	@echo "💡 Don't forget to add 'import logger from \"../utils/logger\"' to files that use logger"
+
+format: ## Format all code (alias for lint-fix)
+	@echo "🎨 Formatting all code..."
+	make lint-fix
 
 # Development servers
 dev: ## Start complete development environment (PostgreSQL + Backend + Frontend)
@@ -81,7 +104,7 @@ dev: ## Start complete development environment (PostgreSQL + Backend + Frontend)
 	@echo "Frontend: http://localhost:3000"
 	@echo "Database: PostgreSQL on localhost:5432"
 	@echo "Use Ctrl+C to stop all services"
-	docker-compose up
+	docker-compose up --build
 
 dev-local: ## Start only backend and frontend (requires PostgreSQL running separately)
 	@echo "🚀 Starting local development servers..."
@@ -133,10 +156,10 @@ docker-build: ## Build Docker images
 	docker-compose build
 
 docker-run: ## Run with Docker Compose
-	docker-compose up
+	docker-compose up --build
 
 docker-run-detached: ## Run with Docker Compose in background
-	docker-compose up -d
+	docker-compose up -d --build
 
 docker-stop: ## Stop Docker containers
 	docker-compose down

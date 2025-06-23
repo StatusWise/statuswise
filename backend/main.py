@@ -11,9 +11,13 @@ from sqlalchemy.orm import Session
 import auth
 import models
 import schemas
+from authorization import (
+    get_authorization_service,
+    require_incident_access,
+    require_project_access,
+)
 from database import SessionLocal, engine
 from lemonsqueezy_service import LemonSqueezyService
-from authorization import require_project_access, require_incident_access, get_authorization_service
 
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
@@ -223,7 +227,7 @@ def create_incident(
 ):
     # Check if user has access to the project
     require_project_access(user, incident.project_id, "write", db)
-    
+
     # Check subscription limits
     if not LemonSqueezyService.can_create_incident(user, incident.project_id, db):
         limits = LemonSqueezyService.get_subscription_limits(user.subscription_tier)
@@ -247,7 +251,7 @@ def list_incidents(
 ):
     # Check if user has access to the project
     require_project_access(user, project_id, "read", db)
-    
+
     return (
         db.query(models.Incident).filter(models.Incident.project_id == project_id).all()
     )
@@ -261,7 +265,7 @@ def resolve_incident(
 ):
     # Check if user has access to the incident
     require_incident_access(user, incident_id, "write", db)
-    
+
     incident = (
         db.query(models.Incident).filter(models.Incident.id == incident_id).first()
     )
@@ -294,7 +298,7 @@ def list_project_incidents(
 ):
     # Check if user has access to the project
     require_project_access(user, project_id, "read", db)
-    
+
     return (
         db.query(models.Incident).filter(models.Incident.project_id == project_id).all()
     )

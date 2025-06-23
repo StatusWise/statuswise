@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from auth import get_password_hash
 from database import Base, override_engine
 from main import app, get_db
-from models import Incident, Project, User, SubscriptionTier, SubscriptionStatus
+from models import Incident, Project, SubscriptionStatus, SubscriptionTier, User
 
 # Create in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -69,12 +69,12 @@ def test_user():
     if existing_user:
         db.close()
         return existing_user
-    
+
     user = User(
-        email="test@example.com", 
+        email="test@example.com",
         hashed_password=get_password_hash("testpassword"),
         subscription_tier=SubscriptionTier.FREE,
-        subscription_status=SubscriptionStatus.ACTIVE
+        subscription_status=SubscriptionStatus.ACTIVE,
     )
     db.add(user)
     db.commit()

@@ -5,6 +5,7 @@ import { z } from 'zod'
 import axios from 'axios'
 import { useRouter } from 'next/router'
 import moment from 'moment'
+import logger from '../utils/logger'
 
 // Zod schemas for validation
 const projectSchema = z.object({
@@ -62,7 +63,7 @@ export default function Dashboard() {
       })
       setSubscription(res.data)
     } catch (error) {
-      console.error('Error fetching subscription:', error)
+      logger.error('Error fetching subscription:', error)
       // Don't set error for subscription fetch failures
     }
   }, [token])
@@ -75,7 +76,7 @@ export default function Dashboard() {
       setProjects(res.data)
       setError('')
     } catch (error) {
-      console.error('Error fetching projects:', error)
+      logger.error('Error fetching projects:', error)
       if (error.response?.status === 401) {
         localStorage.removeItem('token')
         router.push('/login')
@@ -124,7 +125,7 @@ export default function Dashboard() {
       await fetchProjects()
       await fetchSubscriptionStatus() // Refresh usage
     } catch (error) {
-      console.error('Error creating project:', error)
+      logger.error('Error creating project:', error)
       if (error.response?.status === 422) {
         const detail = error.response.data?.detail
         if (Array.isArray(detail)) {
@@ -157,7 +158,7 @@ export default function Dashboard() {
       })
       setIncidents(res.data)
     } catch (error) {
-      console.error('Error fetching incidents:', error)
+      logger.error('Error fetching incidents:', error)
       setIncidents([])
       setError('Failed to fetch incidents. Please try again.')
     }
@@ -176,7 +177,7 @@ export default function Dashboard() {
       incidentForm.reset()
       await fetchIncidents(selectedProject)
     } catch (error) {
-      console.error('Error creating incident:', error)
+      logger.error('Error creating incident:', error)
       if (error.response?.status === 422) {
         const detail = error.response.data?.detail
         if (Array.isArray(detail)) {
@@ -414,7 +415,7 @@ export default function Dashboard() {
                         });
                         await fetchIncidents(selectedProject);
                       } catch (error) {
-                        console.error('Error resolving incident:', error)
+                        logger.error('Error resolving incident:', error)
                         setError('Failed to resolve incident. Please try again.')
                       }
                     }}

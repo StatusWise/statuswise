@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import moment from 'moment'
+import logger from '../../utils/logger'
 
 export default function PublicStatus() {
   const router = useRouter()
@@ -23,7 +24,7 @@ export default function PublicStatus() {
         setLoading(false)
       })
       .catch(err => {
-        console.error('Error fetching incidents:', err)
+        logger.error('Error fetching incidents:', err)
         setError(err.response?.data?.message || 'Failed to load incidents')
         setLoading(false)
       })

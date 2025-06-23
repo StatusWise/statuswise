@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import axios from 'axios'
+import logger from '../utils/logger'
 
 export default function Subscription() {
   const router = useRouter()
@@ -27,7 +28,7 @@ export default function Subscription() {
       })
       setSubscription(response.data)
     } catch (error) {
-      console.error('Error fetching subscription:', error)
+      logger.error('Error fetching subscription:', error)
       if (error.response?.status === 401) {
         localStorage.removeItem('token')
         router.push('/login')
@@ -52,7 +53,7 @@ export default function Subscription() {
       // Redirect to Lemon Squeezy checkout
       window.location.href = response.data.checkout_url
     } catch (error) {
-      console.error('Error creating checkout:', error)
+      logger.error('Error creating checkout:', error)
       setError('Failed to create checkout session. Please try again.')
     } finally {
       setUpgrading(false)
