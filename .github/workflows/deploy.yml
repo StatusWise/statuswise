@@ -18,6 +18,10 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+  pull-requests: write
+
 env:
   REGISTRY: ghcr.io
 
