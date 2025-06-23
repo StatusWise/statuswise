@@ -183,7 +183,7 @@ jobs:
           // Check Python updates
           try {
             const pythonUpdates = fs.readFileSync('backend/python-updates.txt', 'utf8');
-            if (pythonUpdates && !pythonUpdates.includes('No updates available') && pythonUpdates.trim() !== '') {
+            if (pythonUpdates && !pythonUpdates.includes('No updates available') && !pythonUpdates.includes('All dependencies match') && pythonUpdates.trim() !== '') {
               issueBody += '### Python Dependencies\n\n';
               issueBody += '```\n' + pythonUpdates + '\n```\n\n';
               hasUpdates = true;
