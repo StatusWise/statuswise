@@ -1,6 +1,5 @@
 import datetime
 import os
-from typing import Any, Dict
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +11,6 @@ import auth
 import models
 import schemas
 from authorization import (
-    get_authorization_service,
     require_incident_access,
     require_project_access,
 )
@@ -202,7 +200,11 @@ def create_project(
         limits = LemonSqueezyService.get_subscription_limits(user.subscription_tier)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Project limit reached. {user.subscription_tier.value} tier allows {limits['max_projects']} projects. Upgrade to Pro for more projects.",
+            detail=(
+                f"Project limit reached. {user.subscription_tier.value} tier "
+                f"allows {limits['max_projects']} projects. "
+                f"Upgrade to Pro for more projects."
+            ),
         )
 
     db_project = models.Project(name=project.name, owner_id=user.id)
@@ -233,7 +235,11 @@ def create_incident(
         limits = LemonSqueezyService.get_subscription_limits(user.subscription_tier)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Incident limit reached. {user.subscription_tier.value} tier allows {limits['max_incidents_per_project']} incidents per project. Upgrade to Pro for more incidents.",
+            detail=(
+                f"Incident limit reached. {user.subscription_tier.value} tier "
+                f"allows {limits['max_incidents_per_project']} incidents per "
+                f"project. Upgrade to Pro for more incidents."
+            ),
         )
 
     db_incident = models.Incident(**incident.model_dump())

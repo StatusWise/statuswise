@@ -1,7 +1,7 @@
 import datetime
 import re
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import bleach
 from pydantic import BaseModel, ConfigDict, Field, field_validator

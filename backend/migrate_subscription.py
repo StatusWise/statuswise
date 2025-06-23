@@ -9,7 +9,6 @@ import sys
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
 
 # Load environment variables
 load_dotenv()
@@ -23,7 +22,7 @@ def run_migration():
         sys.exit(1)
 
     engine = create_engine(database_url)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    # SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     try:
         with engine.connect() as connection:
@@ -31,10 +30,15 @@ def run_migration():
             result = connection.execute(
                 text(
                     """
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = 'users' 
-                AND column_name IN ('lemonsqueezy_customer_id', 'subscription_tier', 'subscription_status', 'subscription_expires_at')
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'users'
+                AND column_name IN (
+                    'lemonsqueezy_customer_id',
+                    'subscription_tier',
+                    'subscription_status',
+                    'subscription_expires_at'
+                )
             """
                 )
             )
@@ -51,7 +55,8 @@ def run_migration():
             if "lemonsqueezy_customer_id" not in existing_columns:
                 connection.execute(
                     text(
-                        "ALTER TABLE users ADD COLUMN lemonsqueezy_customer_id VARCHAR UNIQUE"
+                        "ALTER TABLE users ADD COLUMN "
+                        "lemonsqueezy_customer_id VARCHAR UNIQUE"
                     )
                 )
                 print("✓ Added lemonsqueezy_customer_id column")
@@ -59,7 +64,8 @@ def run_migration():
             if "subscription_tier" not in existing_columns:
                 connection.execute(
                     text(
-                        "ALTER TABLE users ADD COLUMN subscription_tier VARCHAR DEFAULT 'free'"
+                        "ALTER TABLE users ADD COLUMN "
+                        "subscription_tier VARCHAR DEFAULT 'free'"
                     )
                 )
                 print("✓ Added subscription_tier column")
@@ -73,7 +79,8 @@ def run_migration():
             if "subscription_expires_at" not in existing_columns:
                 connection.execute(
                     text(
-                        "ALTER TABLE users ADD COLUMN subscription_expires_at TIMESTAMP"
+                        "ALTER TABLE users ADD COLUMN "
+                        "subscription_expires_at TIMESTAMP"
                     )
                 )
                 print("✓ Added subscription_expires_at column")
@@ -81,7 +88,8 @@ def run_migration():
             # Update existing users to have 'free' tier
             connection.execute(
                 text(
-                    "UPDATE users SET subscription_tier = 'free' WHERE subscription_tier IS NULL"
+                    "UPDATE users SET subscription_tier = 'free' "
+                    "WHERE subscription_tier IS NULL"
                 )
             )
             print("✓ Set all existing users to free tier")
@@ -112,7 +120,8 @@ def run_migration():
             connection.commit()
             print("\n🎉 Migration completed successfully!")
             print(
-                "Users now have subscription fields and are set to 'free' tier by default."
+                "Users now have subscription fields and are set to "
+                "'free' tier by default."
             )
 
     except Exception as e:

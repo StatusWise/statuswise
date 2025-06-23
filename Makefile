@@ -59,8 +59,8 @@ lint: lint-backend lint-frontend ## Run all linting
 
 lint-backend: ## Lint backend code
 	@echo "🔍 Linting backend..."
-	cd backend && flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-	cd backend && flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+	cd backend && flake8 . --exclude=venv --count --select=E9,F63,F7,F82 --show-source --statistics
+	cd backend && flake8 . --exclude=venv --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
 
 lint-frontend: ## Lint frontend code
 	cd frontend && npm run lint
@@ -71,7 +71,10 @@ lint-fix-backend: ## Fix backend linting issues automatically
 	@echo "🔧 Fixing backend linting issues..."
 	cd backend && black .
 	cd backend && isort .
-	@echo "✅ Backend linting fixed!"
+	@echo "✅ Backend auto-fixes applied!"
+	@echo "🔍 Running flake8 to check for remaining issues..."
+	@cd backend && flake8 . --exclude=venv --count --select=E9,F63,F7,F82 --show-source --statistics || echo "⚠️  Some flake8 issues require manual fixing"
+	@echo "💡 Run 'make lint-backend' for full flake8 report"
 
 lint-fix-frontend: ## Fix frontend linting issues automatically
 	@echo "🔧 Fixing frontend linting issues..."
@@ -91,6 +94,28 @@ convert-console: ## Convert console statements to logger (development-only loggi
 	@cd frontend && find pages utils components -name "*.bak" -delete 2>/dev/null || true
 	@echo "✅ Console statements converted to logger!"
 	@echo "💡 Don't forget to add 'import logger from \"../utils/logger\"' to files that use logger"
+
+lint-info: ## Show what linting tools can and cannot fix
+	@echo "🔧 Linting Tools Overview"
+	@echo "========================"
+	@echo ""
+	@echo "✅ AUTO-FIXABLE (included in lint-fix):"
+	@echo "  Backend:"
+	@echo "    • black      - Code formatting (spacing, quotes, line length)"
+	@echo "    • isort      - Import statement ordering"
+	@echo "  Frontend:"
+	@echo "    • ESLint     - Many style and syntax issues (with --fix)"
+	@echo ""
+	@echo "⚠️  MANUAL FIXES REQUIRED (checked but not auto-fixed):"
+	@echo "  Backend:"
+	@echo "    • flake8     - Code quality, unused variables, syntax errors"
+	@echo "  Frontend:"
+	@echo "    • ESLint     - Logic errors, missing dependencies, complex issues"
+	@echo ""
+	@echo "🎯 RECOMMENDED WORKFLOW:"
+	@echo "  1. make lint-fix     # Apply all auto-fixes"
+	@echo "  2. make lint         # Check for remaining issues"
+	@echo "  3. Fix manually      # Address remaining flake8/ESLint issues"
 
 format: ## Format all code (alias for lint-fix)
 	@echo "🎨 Formatting all code..."

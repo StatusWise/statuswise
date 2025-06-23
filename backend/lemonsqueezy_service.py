@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 import requests
@@ -317,8 +317,6 @@ class LemonSqueezyService:
     def _handle_subscription_resumed(user: User, data: Dict, db: Session) -> bool:
         """Handle subscription resumption"""
         try:
-            attributes = data.get("attributes", {})
-
             # Restore Pro tier
             user.subscription_tier = SubscriptionTier.PRO
             user.subscription_status = SubscriptionStatus.ACTIVE
@@ -372,7 +370,7 @@ class LemonSqueezyService:
             return None
         try:
             return datetime.fromisoformat(date_string.replace("Z", "+00:00"))
-        except:
+        except (ValueError, AttributeError):
             return None
 
     @staticmethod
