@@ -1,5 +1,7 @@
 name: Automation
 
+permissions: write-all
+
 on:
   issues:
     types: [opened, edited, labeled, unlabeled, assigned, unassigned, closed, reopened]
