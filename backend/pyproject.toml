@@ -1,0 +1,58 @@
+[tool.black]
+line-length = 88
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+
+[tool.bandit]
+exclude_dirs = ["venv", "htmlcov", "__pycache__", ".pytest_cache", "tests"]
+skips = ["B101", "B601"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["./tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--disable-warnings",
+    "--cov=.",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "venv/*",
+    "__pycache__/*",
+    ".pytest_cache/*",
+    "htmlcov/*",
+    "*.pyc",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+] 

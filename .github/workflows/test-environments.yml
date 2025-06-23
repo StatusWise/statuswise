@@ -1,0 +1,288 @@
+name: Test Environments
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 6 * * 0'  # Weekly on Sunday at 6 AM UTC
+
+jobs:
+  test-python-versions:
+    name: Test Python Versions
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+        exclude:
+          - python-version: '3.12'  # Exclude 3.12 if not all dependencies support it yet
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: statuswise_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+
+    - name: Run tests
+      run: |
+        cd backend
+        pytest -v
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
+        JWT_SECRET: test_secret_key
+        STRIPE_SECRET_KEY: sk_test_dummy
+
+  test-node-versions:
+    name: Test Node.js Versions
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['18', '20']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Run tests
+      run: |
+        cd frontend
+        npm run test
+      env:
+        CI: true
+
+  test-database-versions:
+    name: Test Database Versions
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        postgres-version: ['13', '14', '15', '16']
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres-version }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: statuswise_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+        pip install locust
+
+    - name: Run tests with PostgreSQL ${{ matrix.postgres-version }}
+      run: |
+        cd backend
+        pytest -v
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
+        JWT_SECRET: test_secret_key
+        STRIPE_SECRET_KEY: sk_test_dummy
+
+  test-docker-compose:
+    name: Test Docker Compose
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build images
+      run: |
+        docker compose build
+
+    - name: Start services
+      run: |
+        cp backend/env.example backend/.env
+        cp frontend/env.example frontend/.env
+        docker compose up -d
+        # Wait for services to be ready
+        sleep 30
+
+    - name: Check service health
+      run: |
+        # Check if backend is responding
+        curl -f http://localhost:8000/health || exit 1
+        # Check if frontend is responding
+        curl -f http://localhost:3000 || exit 1
+
+    - name: Run integration tests
+      run: |
+        # Add integration tests here
+        echo "Running integration tests..."
+        curl -X POST http://localhost:8000/auth/signup -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"testpass123"}'
+
+    - name: Stop services
+      if: always()
+      run: |
+        docker compose down
+
+  test-performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: statuswise_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+        pip install locust
+
+    - name: Initialize database
+      run: |
+        cd backend
+        python -c "
+        from database import engine
+        from models import Base
+        Base.metadata.create_all(bind=engine)
+        print('Database tables created successfully')
+        "
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
+        JWT_SECRET: test_secret_key
+        STRIPE_SECRET_KEY: sk_test_dummy
+
+    - name: Initialize test data
+      run: |
+        cd backend
+        python -c "
+        from tests.performance_test import initialize_test_data
+        initialize_test_data()
+        "
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
+        JWT_SECRET: test_secret_key
+        STRIPE_SECRET_KEY: sk_test_dummy
+
+    - name: Start backend server
+      run: |
+        cd backend
+        export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/statuswise_test
+        export JWT_SECRET=test_secret_key
+        export STRIPE_SECRET_KEY=sk_test_dummy
+        uvicorn main:app --host 0.0.0.0 --port 8000 &
+        sleep 10
+
+    - name: Run performance tests
+      run: |
+        cd backend
+        locust -f ./tests/performance_test.py --headless --users 10 --spawn-rate 2 --run-time 60s --host http://localhost:8000 --html locust-report.html
+
+    - name: Upload performance report
+      uses: actions/upload-artifact@v4
+      if: always() && env.ACTIONS_RUNTIME_TOKEN != ''
+      with:
+        name: performance-report
+        path: backend/locust-report.html
+        retention-days: 30
+
+  test-security:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install security tools
+      run: |
+        pip install bandit safety
+
+    - name: Run Bandit security scan
+      run: |
+        cd backend
+        bandit -c pyproject.toml -r . -f json -o bandit-report.json
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v4
+      if: always() && env.ACTIONS_RUNTIME_TOKEN != ''
+      with:
+        name: security-reports
+        path: backend/bandit-report.json
+        retention-days: 30

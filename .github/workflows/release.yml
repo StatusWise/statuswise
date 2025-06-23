@@ -1,0 +1,41 @@
+name: Release Management
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: |
+          ## What's Changed
+          
+          This release includes various improvements and bug fixes.
+          
+          ### Features
+          - Status page management
+          - Incident tracking
+          - User authentication
+          
+          ### Bug Fixes
+          - Various improvements and fixes
+          
+          ### Technical
+          - Updated dependencies
+          - Improved test coverage
+        draft: false
+        prerelease: false 

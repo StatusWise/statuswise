@@ -1,0 +1,9 @@
+@tailwind reference;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #f5f5f5; /* This is the hex for neutral-100 */
+  font-family: 'Inter', sans-serif; /* Or whatever your font-sans resolves to */
+}
