@@ -71,8 +71,8 @@ jobs:
         done
         echo "PostgreSQL is ready!"
 
-    - name: Run backend tests
-      run: cd backend && pytest -v
+    - name: Run backend tests with proper isolation
+      run: make test-backend
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
         JWT_SECRET: test_secret_key
@@ -172,7 +172,16 @@ jobs:
       run: |
         cd backend
         python -c "from database import engine; from models import Base; Base.metadata.create_all(bind=engine)"
-        pytest -v --tb=short
+        echo "Database initialized, running tests with proper isolation..."
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
+        JWT_SECRET: test_secret_key
+        LEMONSQUEEZY_API_KEY: test_key
+        LEMONSQUEEZY_SIGNING_SECRET: test_secret
+        LEMONSQUEEZY_PRO_VARIANT_ID: test_variant
+
+    - name: Run backend tests with proper isolation
+      run: make test-backend
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
         JWT_SECRET: test_secret_key
