@@ -6,44 +6,153 @@ on:
       - 'v*'
 
 permissions:
-  contents: read
-  pull-requests: write
-  issues: write
-  actions: write
+  contents: write
+  pull-requests: read
+  issues: read
+  actions: read
   deployments: write
   packages: write
 
 jobs:
-  release:
-    name: Create Release
+  build-artifacts:
+    name: Build Release Artifacts
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for changelog generation
 
+    - name: Extract version from tag
+      id: version
+      run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Build frontend
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+        tar -czf ../frontend-build-${{ steps.version.outputs.version }}.tar.gz build/
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Generate changelog since last tag
+        git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"- %s (%h)" > CHANGELOG.md || echo "- Initial release" > CHANGELOG.md
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        cat CHANGELOG.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-artifacts-${{ steps.version.outputs.version }}
+        path: |
+          frontend-build-${{ steps.version.outputs.version }}.tar.gz
+          CHANGELOG.md
+        retention-days: 30
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-artifacts
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Create Release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        name: release-artifacts-${{ needs.build-artifacts.outputs.version }}
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ needs.build-artifacts.outputs.version }}
+        name: Release ${{ needs.build-artifacts.outputs.version }}
         body: |
-          ## What's Changed
+          ## 🚀 StatusWise ${{ needs.build-artifacts.outputs.version }}
           
-          This release includes various improvements and bug fixes.
+          ### What's Changed
+          ${{ needs.build-artifacts.outputs.changelog }}
           
           ### Features
-          - Status page management
-          - Incident tracking
-          - User authentication
+          - ✨ Status page management
+          - 📊 Incident tracking and resolution
+          - 🔐 User authentication and authorization
+          - 💳 Subscription management with Lemon Squeezy
+          - 📱 Responsive frontend interface
+          - 🔌 RESTful API with OpenAPI/Swagger documentation
           
-          ### Bug Fixes
-          - Various improvements and fixes
+          ### Technical Improvements
+          - 🛡️ Enhanced security with proper authorization
+          - 📈 Improved test coverage (79%+)
+          - 🐳 Docker containerization
+          - 🔄 CI/CD pipeline optimization
+          - 📚 Comprehensive API documentation
           
-          ### Technical
-          - Updated dependencies
-          - Improved test coverage
+          ### Installation
+          
+          #### Using Docker (Recommended)
+          ```bash
+          docker compose up --build
+          ```
+          
+          #### Manual Installation
+          ```bash
+          # Backend
+          cd backend
+          pip install -r requirements.txt
+          uvicorn main:app --reload
+          
+          # Frontend
+          cd frontend
+          npm install
+          npm run dev
+          ```
+          
+          ### API Documentation
+          - **Swagger UI**: http://localhost:8000/docs
+          - **ReDoc**: http://localhost:8000/redoc
+          
+          ---
+          
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/v${{ github.event.before }}...${{ github.sha }}
+        files: |
+          frontend-build-${{ needs.build-artifacts.outputs.version }}.tar.gz
         draft: false
-        prerelease: false 
+        prerelease: ${{ contains(needs.build-artifacts.outputs.version, '-') }}
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify-deployment:
+    name: Notify Deployment
+    runs-on: ubuntu-latest
+    needs: [build-artifacts, create-release]
+    if: always()
+    
+    steps:
+    - name: Deployment notification
+      run: |
+        echo "## 🎉 Release ${{ needs.build-artifacts.outputs.version }} Created!" >> $GITHUB_STEP_SUMMARY
+        echo "### Release Status: ${{ needs.create-release.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "### Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ needs.build-artifacts.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ needs.create-release.result }}" == "success" ]]; then
+          echo "✅ Release created successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "🚀 Ready for deployment to production" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Release creation failed" >> $GITHUB_STEP_SUMMARY
+        fi 

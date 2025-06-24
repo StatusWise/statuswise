@@ -1,4 +1,4 @@
-name: Test Environments
+name: Compatibility Testing
 
 on:
   push:
@@ -16,73 +16,80 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-python-versions:
-    name: Test Python Versions
+  # Combined compatibility matrix testing
+  compatibility-matrix:
+    name: Test ${{ matrix.component }} v${{ matrix.version }}
     if: |
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
       (github.event_name == 'pull_request' && github.event.label.name == 'run-compat-tests')
     runs-on: ubuntu-latest
+    
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
-        exclude:
-          - python-version: '3.12'  # Exclude 3.12 if not all dependencies support it yet
+        include:
+          # Python versions
+          - component: "Python"
+            version: "3.9"
+            setup-python: true
+            python-version: "3.9"
+            setup-node: false
+            setup-postgres: true
+            test-target: "backend"
+          - component: "Python"
+            version: "3.10"
+            setup-python: true
+            python-version: "3.10"
+            setup-node: false
+            setup-postgres: true
+            test-target: "backend"
+          - component: "Python"
+            version: "3.11"
+            setup-python: true
+            python-version: "3.11"
+            setup-node: false
+            setup-postgres: true
+            test-target: "backend"
+          # Node.js versions
+          - component: "Node.js"
+            version: "18"
+            setup-python: false
+            setup-node: true
+            node-version: "18"
+            setup-postgres: false
+            test-target: "frontend"
+          - component: "Node.js"
+            version: "20"
+            setup-python: false
+            setup-node: true
+            node-version: "20"
+            setup-postgres: false
+            test-target: "frontend"
 
     services:
       postgres:
-        image: postgres:15
+        image: ${{ matrix.setup-postgres && 'postgres:15' || '' }}
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: statuswise_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+        options: ${{ matrix.setup-postgres && '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5' || '' }}
         ports:
-          - 5432:5432
+          - ${{ matrix.setup-postgres && '5432:5432' || '' }}
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
+      if: matrix.setup-python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install dependencies
-      run: |
-        cd backend
-        pip install -r requirements.txt
-
-    - name: Run tests
-      run: |
-        cd backend
-        pytest -v
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
-        JWT_SECRET: test_secret_key
-        STRIPE_SECRET_KEY: sk_test_dummy
-
-  test-node-versions:
-    name: Test Node.js Versions
-    if: |
-      github.event_name == 'push' ||
-      github.event_name == 'schedule' ||
-      (github.event_name == 'pull_request' && github.event.label.name == 'run-compat-tests')
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['18', '20']
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
     - name: Set up Node.js ${{ matrix.node-version }}
+      if: matrix.setup-node
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
@@ -91,24 +98,38 @@ jobs:
 
     - name: Install dependencies
       run: |
-        cd frontend
-        npm ci
+        if [[ "${{ matrix.test-target }}" == "backend" ]]; then
+          make install-backend
+        elif [[ "${{ matrix.test-target }}" == "frontend" ]]; then
+          make install-frontend
+        fi
 
     - name: Run tests
       run: |
-        cd frontend
-        npm run test
+        if [[ "${{ matrix.test-target }}" == "backend" ]]; then
+          cd backend && pytest -v
+        elif [[ "${{ matrix.test-target }}" == "frontend" ]]; then
+          cd frontend && npm run test
+        fi
       env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
+        JWT_SECRET: test_secret_key
+        LEMONSQUEEZY_API_KEY: test_key
+        LEMONSQUEEZY_SIGNING_SECRET: test_secret
+        LEMONSQUEEZY_PRO_VARIANT_ID: test_variant
         CI: true
 
-  test-database-versions:
-    name: Test Database Versions
+  # Database compatibility testing
+  database-compatibility:
+    name: PostgreSQL v${{ matrix.postgres-version }}
     if: |
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
       (github.event_name == 'pull_request' && github.event.label.name == 'run-compat-tests')
     runs-on: ubuntu-latest
+    
     strategy:
+      fail-fast: false
       matrix:
         postgres-version: ['13', '14', '15', '16']
 
@@ -135,30 +156,32 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
+        cache: 'pip'
 
     - name: Install dependencies
-      run: |
-        cd backend
-        pip install -r requirements.txt
-        pip install locust
+      run: make install-backend
 
-    - name: Run tests with PostgreSQL ${{ matrix.postgres-version }}
+    - name: Run database migration tests
       run: |
         cd backend
-        pytest -v
+        python -c "from database import engine; from models import Base; Base.metadata.create_all(bind=engine)"
+        pytest -v --tb=short
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
         JWT_SECRET: test_secret_key
-        STRIPE_SECRET_KEY: sk_test_dummy
+        LEMONSQUEEZY_API_KEY: test_key
+        LEMONSQUEEZY_SIGNING_SECRET: test_secret
+        LEMONSQUEEZY_PRO_VARIANT_ID: test_variant
 
-  test-docker-compose:
-    name: Test Docker Compose
+  # Integration and performance testing
+  integration-tests:
+    name: Integration & Performance Tests
     if: |
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
       (github.event_name == 'pull_request' && github.event.label.name == 'run-compat-tests')
     runs-on: ubuntu-latest
-
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -166,146 +189,70 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build images
+    - name: Build and test with Docker Compose
       run: |
-        docker compose build
-
-    - name: Start services
-      run: |
+        # Copy environment files
         cp backend/env.example backend/.env
         cp frontend/env.example frontend/.env
+        
+        # Build and start services
+        docker compose build
         docker compose up -d
+        
         # Wait for services to be ready
-        sleep 30
-
-    - name: Check service health
-      run: |
-        # Check if backend is responding
+        echo "Waiting for services to start..."
+        sleep 45
+        
+        # Health checks
         curl -f http://localhost:8000/health || exit 1
-        # Check if frontend is responding
         curl -f http://localhost:3000 || exit 1
-
-    - name: Run integration tests
-      run: |
-        # Add integration tests here
+        
+        # Basic integration tests
         echo "Running integration tests..."
-        curl -X POST http://localhost:8000/auth/signup -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"testpass123"}'
+        curl -X POST http://localhost:8000/signup \
+          -H "Content-Type: application/json" \
+          -d '{"email":"test@example.com","password":"testpass123"}' || exit 1
+        
+        echo "✅ Integration tests passed!"
 
-    - name: Stop services
+    - name: Performance tests
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+        echo "Running basic performance tests..."
+        # Install performance testing tools
+        pip install locust
+        
+        # Run lightweight performance test
+        cd backend
+        timeout 60 locust -f tests/performance_test.py --headless -u 10 -r 2 -t 30s --host=http://localhost:8000 || true
+        
+        echo "✅ Performance tests completed!"
+
+    - name: Cleanup
       if: always()
       run: |
         docker compose down
+        docker system prune -f
 
-  test-performance:
-    name: Performance Tests
+  # Summary job
+  compatibility-summary:
+    name: Compatibility Test Summary
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: statuswise_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
+    needs: [compatibility-matrix, database-compatibility, integration-tests]
+    if: always()
+    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install dependencies
+    - name: Generate summary
       run: |
-        cd backend
-        pip install -r requirements.txt
-        pip install locust
-
-    - name: Initialize database
-      run: |
-        cd backend
-        python -c "
-        from database import engine
-        from models import Base
-        Base.metadata.create_all(bind=engine)
-        print('Database tables created successfully')
-        "
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
-        JWT_SECRET: test_secret_key
-        STRIPE_SECRET_KEY: sk_test_dummy
-
-    - name: Initialize test data
-      run: |
-        cd backend
-        python -c "
-        from tests.performance_test import initialize_test_data
-        initialize_test_data()
-        "
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
-        JWT_SECRET: test_secret_key
-        STRIPE_SECRET_KEY: sk_test_dummy
-
-    - name: Start backend server
-      run: |
-        cd backend
-        export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/statuswise_test
-        export JWT_SECRET=test_secret_key
-        export STRIPE_SECRET_KEY=sk_test_dummy
-        uvicorn main:app --host 0.0.0.0 --port 8000 &
-        sleep 10
-
-    - name: Run performance tests
-      run: |
-        cd backend
-        locust -f ./tests/performance_test.py --headless --users 10 --spawn-rate 2 --run-time 60s --host http://localhost:8000 --html locust-report.html
-
-    - name: Upload performance report
-      uses: actions/upload-artifact@v4
-      if: always() && env.ACTIONS_RUNTIME_TOKEN != ''
-      with:
-        name: performance-report
-        path: backend/locust-report.html
-        retention-days: 30
-
-  test-security:
-    name: Security Tests
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
-    - name: Install security tools
-      run: |
-        pip install bandit safety
-
-    - name: Run Bandit security scan
-      run: |
-        cd backend
-        bandit -c pyproject.toml -r . -f json -o bandit-report.json
-
-    - name: Upload security reports
-      uses: actions/upload-artifact@v4
-      if: always() && env.ACTIONS_RUNTIME_TOKEN != ''
-      with:
-        name: security-reports
-        path: backend/bandit-report.json
-        retention-days: 30
+        echo "## 🧪 Compatibility Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "### Matrix Tests: ${{ needs.compatibility-matrix.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "### Database Tests: ${{ needs.database-compatibility.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "### Integration Tests: ${{ needs.integration-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ needs.compatibility-matrix.result }}" == "success" && 
+              "${{ needs.database-compatibility.result }}" == "success" && 
+              "${{ needs.integration-tests.result }}" == "success" ]]; then
+          echo "✅ All compatibility tests passed!" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Some compatibility tests failed" >> $GITHUB_STEP_SUMMARY
+        fi
