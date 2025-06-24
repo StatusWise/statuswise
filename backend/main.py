@@ -82,7 +82,7 @@ app = FastAPI(
             "name": "webhooks",
             "description": "Webhook endpoints for external services",
         },
-    ]
+    ],
 )
 
 app.add_middleware(
@@ -106,13 +106,13 @@ def get_db():
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
     """
     Register a new user account.
-    
+
     Creates a new user with the provided email and password.
     Optionally creates a Lemon Squeezy customer record for billing.
-    
+
     - **email**: Must be a valid email address
     - **password**: User's password (will be hashed before storage)
-    
+
     Returns the created user information including subscription details.
     """
     # Check if user already exists
@@ -158,13 +158,13 @@ def login(
 ):
     """
     Authenticate user and return access token.
-    
+
     Use this endpoint to authenticate with email and password.
     Returns a Bearer token that should be included in subsequent requests.
-    
+
     - **username**: User's email address
     - **password**: User's password
-    
+
     Returns an access token and token type.
     """
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
@@ -180,7 +180,7 @@ def login(
 def read_root():
     """
     Root endpoint - API status check.
-    
+
     Simple endpoint to verify the API is running.
     """
     return {"message": "StatusWise API Running"}
@@ -190,7 +190,7 @@ def read_root():
 def health_check():
     """
     Health check endpoint.
-    
+
     Returns the current health status of the API with timestamp.
     Useful for monitoring and load balancer health checks.
     """
@@ -201,18 +201,22 @@ def health_check():
 
 
 # Subscription endpoints
-@app.get("/subscription/status", response_model=schemas.SubscriptionStatusResponse, tags=["subscription"])
+@app.get(
+    "/subscription/status",
+    response_model=schemas.SubscriptionStatusResponse,
+    tags=["subscription"],
+)
 def get_subscription_status(
     user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)
 ):
     """
     Get current user's subscription status and limits.
-    
+
     Returns detailed information about the user's subscription including:
     - Current subscription tier (free/pro)
     - Subscription status and expiry
     - Usage limits and current usage
-    
+
     Requires authentication.
     """
     limits = LemonSqueezyService.get_subscription_limits(user.subscription_tier)
@@ -236,19 +240,21 @@ def get_subscription_status(
 
 
 @app.post(
-    "/subscription/create-checkout", response_model=schemas.CheckoutSessionResponse, tags=["subscription"]
+    "/subscription/create-checkout",
+    response_model=schemas.CheckoutSessionResponse,
+    tags=["subscription"],
 )
 def create_checkout_session(
     user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)
 ):
     """
     Create Lemon Squeezy checkout URL for Pro subscription.
-    
+
     Generates a secure checkout URL for upgrading to Pro subscription.
     The user will be redirected to Lemon Squeezy's hosted checkout page.
-    
+
     Requires authentication.
-    
+
     Returns a checkout URL that the client should redirect the user to.
     """
     try:
@@ -280,13 +286,13 @@ def create_checkout_session(
 async def lemonsqueezy_webhook(request: Request, db: Session = Depends(get_db)):
     """
     Handle Lemon Squeezy webhooks.
-    
+
     Processes webhook events from Lemon Squeezy for subscription updates.
     This endpoint is called automatically by Lemon Squeezy when subscription
     events occur (payments, cancellations, etc.).
-    
+
     Verifies webhook signature for security.
-    
+
     **Note**: This endpoint is for webhook processing only, not for direct client use.
     """
     payload = await request.body()
@@ -323,14 +329,14 @@ def create_project(
 ):
     """
     Create a new status page project.
-    
+
     Creates a new project for incident tracking and status page management.
     Project creation is subject to subscription limits.
-    
+
     - **name**: Project name (1-200 characters, cannot be blank)
-    
+
     Requires authentication.
-    
+
     Returns the created project information.
     """
     # Check subscription limits
@@ -358,9 +364,9 @@ def list_projects(
 ):
     """
     List all projects owned by the current user.
-    
+
     Returns a list of all projects that belong to the authenticated user.
-    
+
     Requires authentication.
     """
     return db.query(models.Project).filter(models.Project.owner_id == user.id).all()
@@ -374,17 +380,17 @@ def create_incident(
 ):
     """
     Create a new incident for a project.
-    
+
     Creates a new incident report for the specified project.
     User must have access to the project to create incidents.
-    
+
     - **project_id**: ID of the project to create the incident for
     - **title**: Incident title (1-200 characters)
     - **description**: Detailed incident description (1-5000 characters)
     - **scheduled_start**: Optional scheduled start time for maintenance incidents
-    
+
     Requires authentication and project access.
-    
+
     Returns the created incident information.
     """
     # Check if user has access to the project
@@ -409,7 +415,11 @@ def create_incident(
     return db_incident
 
 
-@app.get("/incidents/{project_id}", response_model=list[schemas.IncidentOut], tags=["incidents"])
+@app.get(
+    "/incidents/{project_id}",
+    response_model=list[schemas.IncidentOut],
+    tags=["incidents"],
+)
 def list_incidents(
     project_id: int,
     db: Session = Depends(get_db),
@@ -417,12 +427,12 @@ def list_incidents(
 ):
     """
     List all incidents for a specific project.
-    
+
     Returns a list of all incidents (resolved and unresolved) for the specified project.
     User must have access to the project.
-    
+
     - **project_id**: ID of the project to list incidents for
-    
+
     Requires authentication and project access.
     """
     # Check if user has access to the project
@@ -433,7 +443,11 @@ def list_incidents(
     )
 
 
-@app.post("/incidents/{incident_id}/resolve", response_model=schemas.IncidentOut, tags=["incidents"])
+@app.post(
+    "/incidents/{incident_id}/resolve",
+    response_model=schemas.IncidentOut,
+    tags=["incidents"],
+)
 def resolve_incident(
     incident_id: int,
     db: Session = Depends(get_db),
@@ -441,14 +455,14 @@ def resolve_incident(
 ):
     """
     Mark an incident as resolved.
-    
+
     Marks the specified incident as resolved and sets the resolution timestamp.
     User must have access to the incident's project.
-    
+
     - **incident_id**: ID of the incident to resolve
-    
+
     Requires authentication and incident access.
-    
+
     Returns the updated incident information.
     """
     # Check if user has access to the incident
@@ -466,16 +480,18 @@ def resolve_incident(
     return incident
 
 
-@app.get("/public/{project_id}", response_model=list[schemas.IncidentOut], tags=["public"])
+@app.get(
+    "/public/{project_id}", response_model=list[schemas.IncidentOut], tags=["public"]
+)
 def public_incidents(project_id: int, db: Session = Depends(get_db)):
     """
     Get public incidents for a project status page.
-    
+
     Returns all incidents for the specified project that are visible on the public status page.
     This endpoint does not require authentication and is used for public status pages.
-    
+
     - **project_id**: ID of the project to get public incidents for
-    
+
     **No authentication required** - this is a public endpoint.
     """
     # Validate that the project exists
@@ -488,7 +504,11 @@ def public_incidents(project_id: int, db: Session = Depends(get_db)):
     )
 
 
-@app.get("/projects/{project_id}/incidents", response_model=list[schemas.IncidentOut], tags=["incidents"])
+@app.get(
+    "/projects/{project_id}/incidents",
+    response_model=list[schemas.IncidentOut],
+    tags=["incidents"],
+)
 def list_project_incidents(
     project_id: int,
     db: Session = Depends(get_db),
@@ -496,13 +516,13 @@ def list_project_incidents(
 ):
     """
     List incidents for a specific project (alternative endpoint).
-    
+
     Alternative endpoint for listing project incidents.
     Returns all incidents for the specified project.
     User must have access to the project.
-    
+
     - **project_id**: ID of the project to list incidents for
-    
+
     Requires authentication and project access.
     """
     # Check if user has access to the project
