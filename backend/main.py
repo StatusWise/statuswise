@@ -10,10 +10,7 @@ from sqlalchemy.orm import Session
 import auth
 import models
 import schemas
-from authorization import (
-    require_incident_access,
-    require_project_access,
-)
+from authorization import require_incident_access, require_project_access
 from database import SessionLocal, engine
 from lemonsqueezy_service import LemonSqueezyService
 
