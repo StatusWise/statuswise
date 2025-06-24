@@ -5,6 +5,7 @@ import { z } from 'zod'
 import axios from 'axios'
 import { useRouter } from 'next/router'
 import moment from 'moment'
+import logger from '../utils/logger'
 
 // Zod schemas for validation
 const projectSchema = z.object({
@@ -38,6 +39,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([])
   const [selectedProject, setSelectedProject] = useState(null)
   const [incidents, setIncidents] = useState([])
+  const [subscription, setSubscription] = useState(null)
   const [error, setError] = useState('')
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : ''
@@ -54,6 +56,18 @@ export default function Dashboard() {
     mode: 'onBlur'
   })
 
+  const fetchSubscriptionStatus = useCallback(async () => {
+    try {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/subscription/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setSubscription(res.data)
+    } catch (error) {
+      logger.error('Error fetching subscription:', error)
+      // Don't set error for subscription fetch failures
+    }
+  }, [token])
+
   const fetchProjects = useCallback(async () => {
     try {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/projects/`, {
@@ -62,7 +76,7 @@ export default function Dashboard() {
       setProjects(res.data)
       setError('')
     } catch (error) {
-      console.error('Error fetching projects:', error)
+      logger.error('Error fetching projects:', error)
       if (error.response?.status === 401) {
         localStorage.removeItem('token')
         router.push('/login')
@@ -74,8 +88,31 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!token) router.push('/login')
-    else fetchProjects()
-  }, [token, router, fetchProjects])
+    else {
+      fetchProjects()
+      fetchSubscriptionStatus()
+    }
+  }, [token, router, fetchProjects, fetchSubscriptionStatus])
+
+  // Check for subscription success/cancel messages
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const subscriptionStatus = urlParams.get('subscription')
+    
+    if (subscriptionStatus === 'success') {
+      setError('')
+      // Refresh subscription status
+      setTimeout(() => {
+        fetchSubscriptionStatus()
+      }, 1000)
+      // Clear URL params
+      window.history.replaceState({}, document.title, window.location.pathname)
+    } else if (subscriptionStatus === 'cancelled') {
+      setError('Subscription upgrade was cancelled.')
+      // Clear URL params
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [fetchSubscriptionStatus])
 
   const onCreateProject = async (data) => {
     setError('')
@@ -86,8 +123,9 @@ export default function Dashboard() {
       })
       projectForm.reset()
       await fetchProjects()
+      await fetchSubscriptionStatus() // Refresh usage
     } catch (error) {
-      console.error('Error creating project:', error)
+      logger.error('Error creating project:', error)
       if (error.response?.status === 422) {
         const detail = error.response.data?.detail
         if (Array.isArray(detail)) {
@@ -102,6 +140,9 @@ export default function Dashboard() {
         }
       } else if (error.response?.status === 400) {
         projectForm.setError('name', { message: 'Project with this name already exists' })
+      } else if (error.response?.status === 403) {
+        // Subscription limit reached
+        setError(error.response.data?.detail || 'Project limit reached. Upgrade to create more projects.')
       } else {
         setError('Failed to create project. Please try again.')
       }
@@ -117,7 +158,7 @@ export default function Dashboard() {
       })
       setIncidents(res.data)
     } catch (error) {
-      console.error('Error fetching incidents:', error)
+      logger.error('Error fetching incidents:', error)
       setIncidents([])
       setError('Failed to fetch incidents. Please try again.')
     }
@@ -136,7 +177,7 @@ export default function Dashboard() {
       incidentForm.reset()
       await fetchIncidents(selectedProject)
     } catch (error) {
-      console.error('Error creating incident:', error)
+      logger.error('Error creating incident:', error)
       if (error.response?.status === 422) {
         const detail = error.response.data?.detail
         if (Array.isArray(detail)) {
@@ -149,6 +190,9 @@ export default function Dashboard() {
         } else {
           setError('Invalid incident data. Please check your input.')
         }
+      } else if (error.response?.status === 403) {
+        // Subscription limit reached
+        setError(error.response.data?.detail || 'Incident limit reached. Upgrade to create more incidents.')
       } else {
         setError('Failed to create incident. Please try again.')
       }
@@ -159,20 +203,94 @@ export default function Dashboard() {
     <div className="min-h-screen p-10">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <button 
-          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-          onClick={() => {
-            localStorage.removeItem('token')
-            router.push('/login')
-          }}
-        >
-          Logout
-        </button>
+        <div className="flex items-center space-x-4">
+          {subscription && (
+            <div className="flex items-center space-x-2">
+              <span className={`px-2 py-1 rounded text-sm font-medium ${
+                subscription.tier === 'pro' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+              }`}>
+                {subscription.tier?.toUpperCase() || 'FREE'}
+              </span>
+              {subscription.tier === 'free' && (
+                <button
+                  onClick={() => router.push('/subscription')}
+                  className="bg-purple-500 text-white px-3 py-1 rounded text-sm hover:bg-purple-600"
+                >
+                  Upgrade
+                </button>
+              )}
+            </div>
+          )}
+          <button
+            onClick={() => router.push('/subscription')}
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          >
+            Subscription
+          </button>
+          <button 
+            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+            onClick={() => {
+              localStorage.removeItem('token')
+              router.push('/login')
+            }}
+          >
+            Logout
+          </button>
+        </div>
       </div>
 
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
           {error}
+        </div>
+      )}
+
+      {/* Subscription Status Card */}
+      {subscription && (
+        <div className="bg-white p-4 rounded shadow mb-6 border-l-4 border-blue-500">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="font-semibold text-gray-900">
+                {subscription.tier === 'pro' ? 'Pro Plan' : 'Free Plan'}
+              </h3>
+              <div className="text-sm text-gray-600 mt-1">
+                Projects: {subscription.usage.projects} / {subscription.limits.max_projects}
+                {subscription.tier === 'free' && subscription.usage.projects >= subscription.limits.max_projects && (
+                  <span className="text-red-600 ml-2">Limit reached!</span>
+                )}
+              </div>
+            </div>
+            {subscription.tier === 'free' && (
+              <div className="text-right">
+                <button
+                  onClick={() => router.push('/subscription')}
+                  className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 text-sm"
+                >
+                  Upgrade to Pro
+                </button>
+                <div className="text-xs text-gray-500 mt-1">
+                  Get 10 projects & more features
+                </div>
+              </div>
+            )}
+            {subscription.tier === 'pro' && subscription.status && (
+              <div className="text-right">
+                <div className={`text-sm font-medium ${
+                  subscription.status === 'active' ? 'text-green-600' : 
+                  subscription.status === 'on_trial' ? 'text-blue-600' : 'text-yellow-600'
+                }`}>
+                  {subscription.status === 'on_trial' ? 'Trial Active' : 
+                   subscription.status === 'active' ? 'Active' : subscription.status}
+                </div>
+                {subscription.expires_at && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    {subscription.status === 'on_trial' ? 'Trial ends' : 'Next billing'}: {' '}
+                    {new Date(subscription.expires_at).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -297,7 +415,7 @@ export default function Dashboard() {
                         });
                         await fetchIncidents(selectedProject);
                       } catch (error) {
-                        console.error('Error resolving incident:', error)
+                        logger.error('Error resolving incident:', error)
                         setError('Failed to resolve incident. Please try again.')
                       }
                     }}

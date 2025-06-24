@@ -35,7 +35,11 @@ export default [
         process: 'readonly',
         document: 'readonly',
         navigator: 'readonly',
-        console: 'readonly'
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly'
       }
     },
     plugins: { react: reactPlugin },
@@ -47,7 +51,7 @@ export default [
     rules: {
       ...reactPlugin.configs.recommended.rules,
       'no-unused-vars': 'warn',
-      'no-console': 'warn',
+      'no-console': process.env.NODE_ENV === 'production' ? 'error' : 'off',
       'react/prop-types': 'off'
     }
   },

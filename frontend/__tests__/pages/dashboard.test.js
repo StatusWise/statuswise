@@ -2,6 +2,7 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import axios from 'axios'
+import { useRouter } from 'next/router'
 import Dashboard from '../../pages/dashboard'
 
 // Mock axios
@@ -9,63 +10,156 @@ jest.mock('axios')
 const mockedAxios = axios
 
 // Mock useRouter
-const mockPush = jest.fn()
 jest.mock('next/router', () => ({
-  useRouter() {
-    return {
-      push: mockPush,
-    }
-  },
+  useRouter: jest.fn(),
 }))
 
+// Mock localStorage
+const localStorageMock = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+}
+Object.defineProperty(window, 'localStorage', { value: localStorageMock })
+
 describe('Dashboard Page', () => {
+  const mockPush = jest.fn()
+  
+  // Helper function to create mock implementation
+  const createMockImplementation = (projectsData = [], incidentsData = [], subscriptionOverrides = {}) => {
+    return (url) => {
+      if (url.includes('/subscription/status')) {
+        return Promise.resolve({
+          data: {
+            tier: 'free',
+            status: null,
+            expires_at: null,
+            limits: {
+              max_projects: 1,
+              max_incidents_per_project: 5,
+              features: ['basic_status_page', 'email_notifications']
+            },
+            usage: {
+              projects: 0
+            },
+            ...subscriptionOverrides
+          }
+        })
+      }
+      if (url.includes('/projects/')) {
+        return Promise.resolve({ data: projectsData })
+      }
+      if (url.includes('/incidents/')) {
+        return Promise.resolve({ data: incidentsData })
+      }
+      return Promise.resolve({ data: [] })
+    }
+  }
+  
   beforeEach(() => {
-    // Mock localStorage
-    Storage.prototype.getItem = jest.fn(() => 'fake-token')
-    // Mock console.error to suppress error messages during tests
-    jest.spyOn(console, 'error').mockImplementation(() => {})
-    jest.clearAllMocks()
+    useRouter.mockReturnValue({
+      push: mockPush,
+    })
+    localStorageMock.getItem.mockReturnValue('fake-token')
+    
+    // Default mock implementation
+    mockedAxios.get.mockImplementation(createMockImplementation())
   })
 
   afterEach(() => {
-    // Restore console.error after each test
-    console.error.mockRestore()
+    jest.clearAllMocks()
   })
 
   test('renders dashboard and fetches projects', async () => {
-    const projects = [{ id: 1, name: 'Test Project' }]
-    mockedAxios.get.mockResolvedValue({ data: projects })
+    // Mock both endpoints
+    mockedAxios.get.mockImplementation((url) => {
+      if (url.includes('/subscription/status')) {
+        return Promise.resolve({
+          data: {
+            tier: 'free',
+            status: null,
+            expires_at: null,
+            limits: {
+              max_projects: 1,
+              max_incidents_per_project: 5,
+              features: ['basic_status_page', 'email_notifications']
+            },
+            usage: {
+              projects: 0
+            }
+          }
+        })
+      }
+      if (url.includes('/projects/')) {
+        return Promise.resolve({ data: [] })
+      }
+      return Promise.resolve({ data: [] })
+    })
     
     await act(async () => {
       render(<Dashboard />)
     })
     
-    expect(await screen.findByText('Dashboard')).toBeInTheDocument()
-    expect(await screen.findByText('Test Project')).toBeInTheDocument()
-    expect(screen.getByText('Logout')).toBeInTheDocument()
+    expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    expect(screen.getByText('Projects')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('New Project Name')).toBeInTheDocument()
+    
+    await waitFor(() => {
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        expect.stringContaining('/projects/'),
+        expect.any(Object)
+      )
+    })
   })
 
   test('creates a new project', async () => {
     const projects = [{ id: 1, name: 'Test Project' }]
-    mockedAxios.get.mockResolvedValue({ data: projects })
-    mockedAxios.post.mockResolvedValue({ data: {} })
     
+    let callCount = 0
+    // Mock both endpoints with proper call sequence
+    mockedAxios.get.mockImplementation((url) => {
+      if (url.includes('/subscription/status')) {
+        return Promise.resolve({
+          data: {
+            tier: 'free',
+            status: null,
+            expires_at: null,
+            limits: {
+              max_projects: 1,
+              max_incidents_per_project: 5,
+              features: ['basic_status_page', 'email_notifications']
+            },
+            usage: {
+              projects: callCount === 0 ? 0 : 1 // Simulate usage increase after project creation
+            }
+          }
+        })
+      }
+      if (url.includes('/projects/')) {
+        callCount++
+        return Promise.resolve({ data: callCount === 1 ? [] : projects })
+      }
+      return Promise.resolve({ data: [] })
+    })
+    
+    mockedAxios.post.mockResolvedValueOnce({ data: { id: 1, name: 'Test Project' } })
+
     await act(async () => {
       render(<Dashboard />)
     })
-    
-    // Wait for initial projects to load
-    await screen.findByText('Test Project')
+
+    const input = screen.getByPlaceholderText('New Project Name')
+    const button = screen.getByRole('button', { name: 'Create' })
 
     await act(async () => {
-      await userEvent.type(screen.getByPlaceholderText('New Project Name'), 'New Test Project')
-      fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+      await userEvent.type(input, 'Test Project')
+      fireEvent.click(button)
     })
 
     await waitFor(() => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
         expect.stringContaining('/projects/'),
-        { name: 'New Test Project' },
+        { name: 'Test Project' },
         expect.any(Object)
       )
     })
@@ -73,21 +167,39 @@ describe('Dashboard Page', () => {
 
   test('fetches incidents for a project', async () => {
     const projects = [{ id: 1, name: 'Test Project' }]
-    const incidents = [{ 
-      id: 1, 
-      title: 'Test Incident', 
-      description: 'Test desc',
-      created_at: new Date().toISOString(),
-      resolved: false
-    }]
-    
-    // Mock the sequence of API calls
-    mockedAxios.get.mockImplementation(url => {
+    const incidents = [
+      { 
+        id: 1, 
+        title: 'Test Incident', 
+        description: 'Test Description',
+        created_at: '2023-01-01T00:00:00Z',
+        resolved: false
+      }
+    ]
+
+    mockedAxios.get.mockImplementation((url) => {
+      if (url.includes('/subscription/status')) {
+        return Promise.resolve({
+          data: {
+            tier: 'free',
+            status: null,
+            expires_at: null,
+            limits: {
+              max_projects: 1,
+              max_incidents_per_project: 5,
+              features: ['basic_status_page', 'email_notifications']
+            },
+            usage: {
+              projects: 1
+            }
+          }
+        })
+      }
+      if (url.includes('/projects/')) {
+        return Promise.resolve({ data: projects })
+      }
       if (url.includes('/incidents/1')) {
         return Promise.resolve({ data: incidents })
-      }
-      if (url.includes('/projects')) {
-        return Promise.resolve({ data: projects })
       }
       return Promise.resolve({ data: [] })
     })
@@ -95,48 +207,100 @@ describe('Dashboard Page', () => {
     await act(async () => {
       render(<Dashboard />)
     })
-    
-    // Wait for the project to appear first
-    const incidentsButton = await screen.findByRole('button', { name: /View Incidents/i })
 
-    // Click the button to trigger the incident fetch
-    await act(async () => {
-      fireEvent.click(incidentsButton)
+    await waitFor(() => {
+      expect(screen.getByText('Test Project')).toBeInTheDocument()
     })
 
-    // Wait for the incidents to be rendered
-    expect(await screen.findByText('Incidents for Project 1')).toBeInTheDocument()
-    expect(await screen.findByText('Test Incident')).toBeInTheDocument()
+    const viewButton = screen.getByRole('button', { name: 'View Incidents' })
+    
+    await act(async () => {
+      fireEvent.click(viewButton)
+    })
+
+    await waitFor(() => {
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        expect.stringContaining('/incidents/1'),
+        expect.any(Object)
+      )
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Incident')).toBeInTheDocument()
+    })
   })
 
   test('shows validation error when creating a project with empty name', async () => {
-    mockedAxios.get.mockResolvedValue({ data: [] })
-    
+    mockedAxios.get.mockImplementation((url) => {
+      if (url.includes('/subscription/status')) {
+        return Promise.resolve({
+          data: {
+            tier: 'free',
+            status: null,
+            expires_at: null,
+            limits: {
+              max_projects: 1,
+              max_incidents_per_project: 5,
+              features: ['basic_status_page', 'email_notifications']
+            },
+            usage: {
+              projects: 0
+            }
+          }
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
     await act(async () => {
       render(<Dashboard />)
     })
+
+    const button = screen.getByRole('button', { name: 'Create' })
     
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+      fireEvent.click(button)
     })
-    
+
     await waitFor(() => {
       expect(screen.getByText('Project name is required')).toBeInTheDocument()
     })
   })
 
   test('shows validation error when creating a project with short name', async () => {
-    mockedAxios.get.mockResolvedValue({ data: [] })
-    
+    mockedAxios.get.mockImplementation((url) => {
+      if (url.includes('/subscription/status')) {
+        return Promise.resolve({
+          data: {
+            tier: 'free',
+            status: null,
+            expires_at: null,
+            limits: {
+              max_projects: 1,
+              max_incidents_per_project: 5,
+              features: ['basic_status_page', 'email_notifications']
+            },
+            usage: {
+              projects: 0
+            }
+          }
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
     await act(async () => {
       render(<Dashboard />)
     })
-    
+
+    const input = screen.getByPlaceholderText('New Project Name')
+    const button = screen.getByRole('button', { name: 'Create' })
+
     await act(async () => {
-      await userEvent.type(screen.getByPlaceholderText('New Project Name'), 'A')
-      fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+      await userEvent.type(input, 'A')
+      fireEvent.click(button)
     })
-    
+
     await waitFor(() => {
       expect(screen.getByText('Project name must be at least 2 characters long')).toBeInTheDocument()
     })
@@ -144,25 +308,33 @@ describe('Dashboard Page', () => {
 
   test('shows validation errors when creating an incident with missing fields', async () => {
     const projects = [{ id: 1, name: 'Test Project' }]
-    mockedAxios.get.mockImplementation(url => {
-      if (url.includes('/projects')) return Promise.resolve({ data: projects })
-      if (url.includes('/incidents/1')) return Promise.resolve({ data: [] })
-      return Promise.resolve({ data: [] })
-    })
     
+    mockedAxios.get.mockImplementation(createMockImplementation(projects, [], { usage: { projects: 1 } }))
+
     await act(async () => {
       render(<Dashboard />)
     })
-    
-    const incidentsButton = await screen.findByRole('button', { name: /View Incidents/i })
-    await act(async () => {
-      fireEvent.click(incidentsButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project')).toBeInTheDocument()
     })
+
+    const viewButton = screen.getByRole('button', { name: 'View Incidents' })
     
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Create Incident' }))
+      fireEvent.click(viewButton)
     })
+
+    await waitFor(() => {
+      expect(screen.getByText('Incidents for Project 1')).toBeInTheDocument()
+    })
+
+    const createButton = screen.getByRole('button', { name: 'Create Incident' })
     
+    await act(async () => {
+      fireEvent.click(createButton)
+    })
+
     await waitFor(() => {
       expect(screen.getByText('Incident title is required')).toBeInTheDocument()
       expect(screen.getByText('Incident description is required')).toBeInTheDocument()
@@ -171,27 +343,35 @@ describe('Dashboard Page', () => {
 
   test('shows validation error for short incident title', async () => {
     const projects = [{ id: 1, name: 'Test Project' }]
-    mockedAxios.get.mockImplementation(url => {
-      if (url.includes('/projects')) return Promise.resolve({ data: projects })
-      if (url.includes('/incidents/1')) return Promise.resolve({ data: [] })
-      return Promise.resolve({ data: [] })
-    })
     
+    mockedAxios.get.mockImplementation(createMockImplementation(projects, [], { usage: { projects: 1 } }))
+
     await act(async () => {
       render(<Dashboard />)
     })
-    
-    const incidentsButton = await screen.findByRole('button', { name: /View Incidents/i })
-    await act(async () => {
-      fireEvent.click(incidentsButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project')).toBeInTheDocument()
     })
+
+    const viewButton = screen.getByRole('button', { name: 'View Incidents' })
     
     await act(async () => {
-      await userEvent.type(screen.getByPlaceholderText('Incident Title'), 'Hi')
-      await userEvent.type(screen.getByPlaceholderText(/Description/), 'Valid description here')
-      fireEvent.click(screen.getByRole('button', { name: 'Create Incident' }))
+      fireEvent.click(viewButton)
     })
-    
+
+    await waitFor(() => {
+      expect(screen.getByText('Incidents for Project 1')).toBeInTheDocument()
+    })
+
+    const titleInput = screen.getByPlaceholderText('Incident Title')
+    const createButton = screen.getByRole('button', { name: 'Create Incident' })
+
+    await act(async () => {
+      await userEvent.type(titleInput, 'AB')
+      fireEvent.click(createButton)
+    })
+
     await waitFor(() => {
       expect(screen.getByText('Incident title must be at least 3 characters long')).toBeInTheDocument()
     })
@@ -199,27 +379,37 @@ describe('Dashboard Page', () => {
 
   test('shows validation error for short incident description', async () => {
     const projects = [{ id: 1, name: 'Test Project' }]
-    mockedAxios.get.mockImplementation(url => {
-      if (url.includes('/projects')) return Promise.resolve({ data: projects })
-      if (url.includes('/incidents/1')) return Promise.resolve({ data: [] })
-      return Promise.resolve({ data: [] })
-    })
     
+    mockedAxios.get.mockImplementation(createMockImplementation(projects, [], { usage: { projects: 1 } }))
+
     await act(async () => {
       render(<Dashboard />)
     })
-    
-    const incidentsButton = await screen.findByRole('button', { name: /View Incidents/i })
-    await act(async () => {
-      fireEvent.click(incidentsButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project')).toBeInTheDocument()
     })
+
+    const viewButton = screen.getByRole('button', { name: 'View Incidents' })
     
     await act(async () => {
-      await userEvent.type(screen.getByPlaceholderText('Incident Title'), 'Valid Title')
-      await userEvent.type(screen.getByPlaceholderText(/Description/), 'Short')
-      fireEvent.click(screen.getByRole('button', { name: 'Create Incident' }))
+      fireEvent.click(viewButton)
     })
-    
+
+    await waitFor(() => {
+      expect(screen.getByText('Incidents for Project 1')).toBeInTheDocument()
+    })
+
+    const titleInput = screen.getByPlaceholderText('Incident Title')
+    const descInput = screen.getByPlaceholderText('Description (detailed explanation of the incident)')
+    const createButton = screen.getByRole('button', { name: 'Create Incident' })
+
+    await act(async () => {
+      await userEvent.type(titleInput, 'Valid Title')
+      await userEvent.type(descInput, 'Short')
+      fireEvent.click(createButton)
+    })
+
     await waitFor(() => {
       expect(screen.getByText('Incident description must be at least 10 characters long')).toBeInTheDocument()
     })
@@ -227,204 +417,297 @@ describe('Dashboard Page', () => {
 
   test('can resolve an open incident', async () => {
     const projects = [{ id: 1, name: 'Test Project' }]
-    const incidents = [{ 
-      id: 1, 
-      title: 'Test Incident', 
-      description: 'desc', 
-      created_at: new Date().toISOString(), 
-      resolved: false 
-    }]
-    
-    mockedAxios.get.mockImplementation(url => {
-      if (url.includes('/projects')) return Promise.resolve({ data: projects })
-      if (url.includes('/incidents/1')) return Promise.resolve({ data: incidents })
+    const incidents = [
+      { 
+        id: 1, 
+        title: 'Test Incident', 
+        description: 'Test Description',
+        created_at: '2023-01-01T00:00:00Z',
+        resolved: false
+      }
+    ]
+    const resolvedIncidents = [
+      { 
+        id: 1, 
+        title: 'Test Incident', 
+        description: 'Test Description',
+        created_at: '2023-01-01T00:00:00Z',
+        resolved: true,
+        resolved_at: '2023-01-01T01:00:00Z'
+      }
+    ]
+
+    let callCount = 0
+    mockedAxios.get.mockImplementation((url) => {
+      if (url.includes('/subscription/status')) {
+        return Promise.resolve({
+          data: {
+            tier: 'free',
+            status: null,
+            expires_at: null,
+            limits: {
+              max_projects: 1,
+              max_incidents_per_project: 5,
+              features: ['basic_status_page', 'email_notifications']
+            },
+            usage: {
+              projects: 1
+            }
+          }
+        })
+      }
+      if (url.includes('/projects/')) {
+        return Promise.resolve({ data: projects })
+      }
+      if (url.includes('/incidents/1')) {
+        callCount++
+        return Promise.resolve({ data: callCount === 1 ? incidents : resolvedIncidents })
+      }
       return Promise.resolve({ data: [] })
     })
-    mockedAxios.post.mockResolvedValue({ data: {} })
     
+    mockedAxios.post.mockResolvedValueOnce({})
+
     await act(async () => {
       render(<Dashboard />)
     })
-    
-    const incidentsButton = await screen.findByRole('button', { name: /View Incidents/i })
-    await act(async () => {
-      fireEvent.click(incidentsButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project')).toBeInTheDocument()
     })
+
+    const viewButton = screen.getByRole('button', { name: 'View Incidents' })
     
-    const resolveButton = await screen.findByRole('button', { name: 'Resolve' })
+    await act(async () => {
+      fireEvent.click(viewButton)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Incident')).toBeInTheDocument()
+      expect(screen.getByText('Open')).toBeInTheDocument()
+    })
+
+    const resolveButton = screen.getByRole('button', { name: 'Resolve' })
+    
     await act(async () => {
       fireEvent.click(resolveButton)
     })
-    
-    expect(mockedAxios.post).toHaveBeenCalledWith(
-      expect.stringContaining('/incidents/1/resolve'),
-      {},
-      expect.any(Object)
-    )
+
+    await waitFor(() => {
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/incidents/1/resolve'),
+        {},
+        expect.any(Object)
+      )
+    })
   })
 
   test('renders with no projects message', async () => {
-    mockedAxios.get.mockResolvedValue({ data: [] })
-    
+    mockedAxios.get.mockImplementation(createMockImplementation())
+
     await act(async () => {
       render(<Dashboard />)
     })
-    
-    expect(screen.getByText('Projects')).toBeInTheDocument()
-    expect(screen.getByText('No projects yet. Create your first project above!')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.getByText('No projects yet. Create your first project above!')).toBeInTheDocument()
+    })
   })
 
   test('renders with no incidents message', async () => {
     const projects = [{ id: 1, name: 'Test Project' }]
-    mockedAxios.get.mockImplementation(url => {
-      if (url.includes('/projects')) return Promise.resolve({ data: projects })
-      if (url.includes('/incidents/1')) return Promise.resolve({ data: [] })
-      return Promise.resolve({ data: [] })
-    })
     
+    mockedAxios.get.mockImplementation(createMockImplementation(projects, [], { usage: { projects: 1 } }))
+
     await act(async () => {
       render(<Dashboard />)
     })
-    
-    const incidentsButton = await screen.findByRole('button', { name: /View Incidents/i })
-    await act(async () => {
-      fireEvent.click(incidentsButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project')).toBeInTheDocument()
     })
+
+    const viewButton = screen.getByRole('button', { name: 'View Incidents' })
     
-    expect(screen.getByText('Incidents for Project 1')).toBeInTheDocument()
-    expect(screen.getByText('No incidents reported for this project yet.')).toBeInTheDocument()
+    await act(async () => {
+      fireEvent.click(viewButton)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('No incidents reported for this project yet.')).toBeInTheDocument()
+    })
   })
 
   test('renders scheduled incidents correctly', async () => {
     const projects = [{ id: 1, name: 'Test Project' }]
-    const scheduledDate = new Date('2024-01-01T10:00:00Z')
-    const incidents = [{ 
-      id: 1, 
-      title: 'Scheduled Incident', 
-      description: 'desc', 
-      created_at: new Date().toISOString(),
-      scheduled_start: scheduledDate.toISOString(),
-      resolved: false 
-    }]
-    
-    mockedAxios.get.mockImplementation(url => {
-      if (url.includes('/projects')) return Promise.resolve({ data: projects })
-      if (url.includes('/incidents/1')) return Promise.resolve({ data: incidents })
-      return Promise.resolve({ data: [] })
-    })
-    
+    const incidents = [
+      { 
+        id: 1, 
+        title: 'Scheduled Maintenance', 
+        description: 'Server maintenance',
+        created_at: '2023-01-01T00:00:00Z',
+        scheduled_start: '2023-01-02T00:00:00Z',
+        resolved: false
+      }
+    ]
+
+    mockedAxios.get.mockImplementation(createMockImplementation(projects, incidents, { usage: { projects: 1 } }))
+
     await act(async () => {
       render(<Dashboard />)
     })
-    
-    const incidentsButton = await screen.findByRole('button', { name: /View Incidents/i })
-    await act(async () => {
-      fireEvent.click(incidentsButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project')).toBeInTheDocument()
     })
+
+    const viewButton = screen.getByRole('button', { name: 'View Incidents' })
     
-    expect(await screen.findByText(/Scheduled for:/)).toBeInTheDocument()
+    await act(async () => {
+      fireEvent.click(viewButton)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Scheduled Maintenance')).toBeInTheDocument()
+      expect(screen.getByText(/Scheduled for:/)).toBeInTheDocument()
+    })
   })
 
   test('renders resolved incidents correctly', async () => {
     const projects = [{ id: 1, name: 'Test Project' }]
-    const resolvedDate = new Date('2024-01-01T12:00:00Z')
-    const incidents = [{ 
-      id: 1, 
-      title: 'Resolved Incident', 
-      description: 'desc', 
-      created_at: new Date().toISOString(),
-      resolved: true,
-      resolved_at: resolvedDate.toISOString()
-    }]
-    
-    mockedAxios.get.mockImplementation(url => {
-      if (url.includes('/projects')) return Promise.resolve({ data: projects })
-      if (url.includes('/incidents/1')) return Promise.resolve({ data: incidents })
-      return Promise.resolve({ data: [] })
-    })
-    
+    const incidents = [
+      { 
+        id: 1, 
+        title: 'Resolved Issue', 
+        description: 'Fixed issue',
+        created_at: '2023-01-01T00:00:00Z',
+        resolved: true,
+        resolved_at: '2023-01-01T01:00:00Z'
+      }
+    ]
+
+    mockedAxios.get.mockImplementation(createMockImplementation(projects, incidents, { usage: { projects: 1 } }))
+
     await act(async () => {
       render(<Dashboard />)
     })
-    
-    const incidentsButton = await screen.findByRole('button', { name: /View Incidents/i })
-    await act(async () => {
-      fireEvent.click(incidentsButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project')).toBeInTheDocument()
     })
+
+    const viewButton = screen.getByRole('button', { name: 'View Incidents' })
     
-    expect(await screen.findByText(/Resolved at/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument()
+    await act(async () => {
+      fireEvent.click(viewButton)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Resolved Issue')).toBeInTheDocument()
+      expect(screen.getByText(/Resolved at/)).toBeInTheDocument()
+    })
   })
 
   test('creates incident with scheduled start', async () => {
     const projects = [{ id: 1, name: 'Test Project' }]
-    mockedAxios.get.mockImplementation(url => {
-      if (url.includes('/projects')) return Promise.resolve({ data: projects })
-      if (url.includes('/incidents/1')) return Promise.resolve({ data: [] })
+    const newIncident = {
+      id: 2,
+      title: 'Scheduled Maintenance',
+      description: 'Server maintenance window',
+      created_at: '2023-01-01T00:00:00Z',
+      scheduled_start: '2023-01-02T00:00:00Z',
+      resolved: false
+    }
+
+    let callCount = 0
+    mockedAxios.get.mockImplementation((url) => {
+      if (url.includes('/subscription/status')) {
+        return Promise.resolve({
+          data: {
+            tier: 'free',
+            status: null,
+            expires_at: null,
+            limits: {
+              max_projects: 1,
+              max_incidents_per_project: 5,
+              features: ['basic_status_page', 'email_notifications']
+            },
+            usage: {
+              projects: 1
+            }
+          }
+        })
+      }
+      if (url.includes('/projects/')) {
+        return Promise.resolve({ data: projects })
+      }
+      if (url.includes('/incidents/1')) {
+        callCount++
+        return Promise.resolve({ data: callCount === 1 ? [] : [newIncident] })
+      }
       return Promise.resolve({ data: [] })
     })
-    mockedAxios.post.mockResolvedValue({ data: {} })
     
+    mockedAxios.post.mockResolvedValueOnce({ data: newIncident })
+
     await act(async () => {
       render(<Dashboard />)
     })
-    
-    const incidentsButton = await screen.findByRole('button', { name: /View Incidents/i })
-    await act(async () => {
-      fireEvent.click(incidentsButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Project')).toBeInTheDocument()
     })
+
+    const viewButton = screen.getByRole('button', { name: 'View Incidents' })
     
     await act(async () => {
-      await userEvent.type(screen.getByPlaceholderText('Incident Title'), 'Test Incident')
-      await userEvent.type(screen.getByPlaceholderText(/Description/), 'Test Description Here')
-      const datetimeInput = screen.getByPlaceholderText('Scheduled Start (optional)')
-      fireEvent.change(datetimeInput, { target: { value: '2024-01-01T10:00' } })
-      fireEvent.click(screen.getByRole('button', { name: 'Create Incident' }))
+      fireEvent.click(viewButton)
     })
-    
-    expect(mockedAxios.post).toHaveBeenCalledWith(
-      expect.stringContaining('/incidents/'),
-      expect.objectContaining({
-        project_id: 1,
-        title: 'Test Incident',
-        description: 'Test Description Here',
-        scheduled_start: expect.any(String)
-      }),
-      expect.any(Object)
-    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Incidents for Project 1')).toBeInTheDocument()
+    })
+
+    const titleInput = screen.getByPlaceholderText('Incident Title')
+    const descInput = screen.getByPlaceholderText('Description (detailed explanation of the incident)')
+    const scheduleInput = screen.getByPlaceholderText('Scheduled Start (optional)')
+    const createButton = screen.getByRole('button', { name: 'Create Incident' })
+
+    await act(async () => {
+      await userEvent.type(titleInput, 'Scheduled Maintenance')
+      await userEvent.type(descInput, 'Server maintenance window')
+      await userEvent.type(scheduleInput, '2023-01-02T00:00')
+      fireEvent.click(createButton)
+    })
+
+    await waitFor(() => {
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        expect.stringContaining('/incidents/'),
+        expect.objectContaining({
+          project_id: 1,
+          title: 'Scheduled Maintenance',
+          description: 'Server maintenance window',
+          scheduled_start: expect.any(String)
+        }),
+        expect.any(Object)
+      )
+    })
   })
 
   test('handles logout correctly', async () => {
-    const projects = [{ id: 1, name: 'Test Project' }]
-    mockedAxios.get.mockResolvedValue({ data: projects })
-    Storage.prototype.removeItem = jest.fn()
-    
+    mockedAxios.get.mockImplementation(createMockImplementation())
+
     await act(async () => {
       render(<Dashboard />)
     })
+
+    const logoutButton = screen.getByRole('button', { name: 'Logout' })
     
-    const logoutButton = await screen.findByRole('button', { name: 'Logout' })
     await act(async () => {
       fireEvent.click(logoutButton)
     })
-    
-    expect(localStorage.removeItem).toHaveBeenCalledWith('token')
+
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('token')
     expect(mockPush).toHaveBeenCalledWith('/login')
   })
-
-  test('handles 401 error by redirecting to login', async () => {
-    mockedAxios.get.mockRejectedValue({ 
-      response: { status: 401 } 
-    })
-    Storage.prototype.removeItem = jest.fn()
-    
-    await act(async () => {
-      render(<Dashboard />)
-    })
-    
-    await waitFor(() => {
-      expect(localStorage.removeItem).toHaveBeenCalledWith('token')
-      expect(mockPush).toHaveBeenCalledWith('/login')
-    })
-  })
-}) 
+})

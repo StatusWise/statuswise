@@ -1,9 +1,25 @@
 import datetime
 import re
-from typing import Optional
+from enum import Enum
+from typing import Any, Dict, Optional
 
 import bleach
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class SubscriptionTier(str, Enum):
+    FREE = "free"
+    PRO = "pro"
+
+
+class SubscriptionStatus(str, Enum):
+    ACTIVE = "active"
+    CANCELED = "canceled"
+    PAST_DUE = "past_due"
+    UNPAID = "unpaid"
+    ON_TRIAL = "on_trial"
+    PAUSED = "paused"
+    EXPIRED = "expired"
 
 
 class UserCreate(BaseModel):
@@ -21,8 +37,27 @@ class UserCreate(BaseModel):
 class UserOut(BaseModel):
     id: int
     email: str
+    subscription_tier: SubscriptionTier
+    subscription_status: Optional[SubscriptionStatus]
+    subscription_expires_at: Optional[datetime.datetime]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SubscriptionStatusResponse(BaseModel):
+    tier: SubscriptionTier
+    status: Optional[SubscriptionStatus]
+    expires_at: Optional[datetime.datetime]
+    limits: Dict[str, Any]
+    usage: Dict[str, int]
+
+
+class CheckoutSessionResponse(BaseModel):
+    checkout_url: str
+
+
+class PortalSessionResponse(BaseModel):
+    portal_url: str
 
 
 class ProjectCreate(BaseModel):
