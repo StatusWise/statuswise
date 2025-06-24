@@ -18,9 +18,24 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  test-backend:
-    name: Test Backend
+  # Use reusable setup workflow
+  setup:
+    name: Environment Setup
+    uses: ./.github/workflows/reusable-setup.yml
+    with:
+      setup-python: true
+      python-version: '3.11'
+      setup-node: true
+      node-version: '18'
+      setup-postgres: true
+      install-dependencies: 'both'
+      cache-key-suffix: 'ci'
+
+  # Consolidated backend testing and linting
+  backend:
+    name: Backend Tests & Quality
     runs-on: ubuntu-latest
+    needs: setup
     
     services:
       postgres:
@@ -47,10 +62,23 @@ jobs:
         python-version: '3.11'
         cache: 'pip'
 
-    - name: Install dependencies
+    - name: Install dependencies (cached)
       run: make install-backend
 
-    - name: Run backend tests with proper isolation
+    - name: Run linting (flake8, black, isort)
+      run: |
+        echo "🔍 Running comprehensive backend linting..."
+        cd backend
+        echo "Running flake8..."
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=15 --max-line-length=88 --statistics
+        echo "Running black..."
+        black --check --diff .
+        echo "Running isort..."
+        isort --check-only --diff .
+        echo "✅ All backend linting passed!"
+
+    - name: Run backend tests with coverage
       run: make ci-test-backend
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/statuswise_test
@@ -67,9 +95,18 @@ jobs:
         flags: backend
         name: backend-coverage
 
-  test-frontend:
-    name: Test Frontend
+    - name: Security scan (Bandit)
+      run: |
+        cd backend
+        bandit -r . -f json -o bandit-report.json || true
+        bandit -r . --severity-level medium
+      continue-on-error: true
+
+  # Consolidated frontend testing and linting  
+  frontend:
+    name: Frontend Tests & Quality
     runs-on: ubuntu-latest
+    needs: setup
 
     steps:
     - name: Checkout code
@@ -82,10 +119,17 @@ jobs:
         cache: 'npm'
         cache-dependency-path: frontend/package-lock.json
 
-    - name: Install dependencies
+    - name: Install dependencies (cached)
       run: make install-frontend
 
-    - name: Run frontend tests
+    - name: Run linting (ESLint)
+      run: |
+        echo "🔍 Running frontend linting..."
+        cd frontend
+        npm run lint
+        echo "✅ Frontend linting passed!"
+
+    - name: Run frontend tests with coverage
       run: make ci-test-frontend
       env:
         CI: true
@@ -98,43 +142,32 @@ jobs:
         flags: frontend
         name: frontend-coverage
 
-  lint-backend:
-    name: Lint Backend
+    - name: Build check
+      run: |
+        echo "🏗️ Verifying production build..."
+        cd frontend
+        npm run build
+        echo "✅ Production build successful!"
+
+  # Quality gates and summary
+  quality-gate:
+    name: Quality Gate
     runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: always()
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-
-    - name: Install backend dependencies
-      run: make install-backend
-
-    - name: Lint backend code
-      run: make lint-backend
-
-  lint-frontend:
-    name: Lint Frontend
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
-
-    - name: Install frontend dependencies
-      run: make install-frontend
-
-    - name: Lint frontend code
-      run: make lint-frontend
+    - name: Check all jobs status
+      run: |
+        echo "## 🎯 Quality Gate Summary" >> $GITHUB_STEP_SUMMARY
+        echo "### Backend Status: ${{ needs.backend.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "### Frontend Status: ${{ needs.frontend.result }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ needs.backend.result }}" == "success" && "${{ needs.frontend.result }}" == "success" ]]; then
+          echo "✅ All quality checks passed!" >> $GITHUB_STEP_SUMMARY
+          echo "🚀 Ready for deployment" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Quality gate failed" >> $GITHUB_STEP_SUMMARY
+          echo "🔧 Please fix the issues above" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi

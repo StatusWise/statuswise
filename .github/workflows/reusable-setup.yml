@@ -1,0 +1,147 @@
+name: Reusable Setup
+
+on:
+  workflow_call:
+    inputs:
+      setup-python:
+        description: 'Setup Python environment'
+        type: boolean
+        default: true
+      python-version:
+        description: 'Python version to use'
+        type: string
+        default: '3.11'
+      setup-node:
+        description: 'Setup Node.js environment'
+        type: boolean
+        default: true
+      node-version:
+        description: 'Node.js version to use'
+        type: string
+        default: '18'
+      setup-postgres:
+        description: 'Setup PostgreSQL service'
+        type: boolean
+        default: false
+      install-dependencies:
+        description: 'Install project dependencies'
+        type: string
+        default: 'both' # both, backend, frontend, none
+      cache-key-suffix:
+        description: 'Additional cache key suffix'
+        type: string
+        default: ''
+
+    outputs:
+      cache-hit-backend:
+        description: 'Backend cache hit status'
+        value: ${{ jobs.setup.outputs.cache-hit-backend }}
+      cache-hit-frontend:
+        description: 'Frontend cache hit status'
+        value: ${{ jobs.setup.outputs.cache-hit-frontend }}
+
+jobs:
+  setup:
+    name: Environment Setup
+    runs-on: ubuntu-latest
+    outputs:
+      cache-hit-backend: ${{ steps.cache-backend.outputs.cache-hit }}
+      cache-hit-frontend: ${{ steps.cache-frontend.outputs.cache-hit }}
+    
+    services:
+      postgres:
+        image: ${{ inputs.setup-postgres && 'postgres:15' || '' }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: statuswise_test
+        options: ${{ inputs.setup-postgres && '--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5' || '' }}
+        ports:
+          - ${{ inputs.setup-postgres && '5432:5432' || '' }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ inputs.python-version }}
+      if: inputs.setup-python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Cache Python dependencies
+      if: inputs.setup-python
+      id: cache-backend
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}-${{ inputs.cache-key-suffix }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          ${{ runner.os }}-pip-
+
+    - name: Set up Node.js ${{ inputs.node-version }}
+      if: inputs.setup-node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Cache Node.js dependencies
+      if: inputs.setup-node
+      id: cache-frontend
+      uses: actions/cache@v3
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('frontend/package-lock.json') }}-${{ inputs.cache-key-suffix }}
+        restore-keys: |
+          ${{ runner.os }}-node-${{ hashFiles('frontend/package-lock.json') }}
+          ${{ runner.os }}-node-
+
+    - name: Install PostgreSQL client tools
+      if: inputs.setup-postgres
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client
+
+    - name: Install backend dependencies
+      if: inputs.setup-python && (inputs.install-dependencies == 'both' || inputs.install-dependencies == 'backend')
+      run: make install-backend
+
+    - name: Install frontend dependencies
+      if: inputs.setup-node && (inputs.install-dependencies == 'both' || inputs.install-dependencies == 'frontend')
+      run: make install-frontend
+
+    - name: Verify PostgreSQL connection
+      if: inputs.setup-postgres
+      run: |
+        echo "Waiting for PostgreSQL to be ready..."
+        max_attempts=30
+        attempt=1
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "Attempt $attempt of $max_attempts..."
+          
+          if pg_isready -h localhost -p 5432; then
+            echo "✅ PostgreSQL is ready!"
+            
+            # Test actual connection
+            if PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d statuswise_test -c "SELECT 1;" > /dev/null 2>&1; then
+              echo "✅ PostgreSQL connection test successful!"
+              break
+            else
+              echo "⚠️ PostgreSQL is ready but connection test failed"
+            fi
+          else
+            echo "⚠️ PostgreSQL not ready yet..."
+          fi
+          
+          if [ $attempt -eq $max_attempts ]; then
+            echo "❌ PostgreSQL failed to become ready after $max_attempts attempts"
+            exit 1
+          fi
+          
+          sleep 2
+          attempt=$((attempt + 1))
+        done 
