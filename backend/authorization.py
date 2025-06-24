@@ -1,6 +1,7 @@
 """
 Authorization service using Casbin for access control.
 """
+
 from typing import Optional
 
 import casbin

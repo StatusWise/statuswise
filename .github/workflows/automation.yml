@@ -34,7 +34,7 @@ jobs:
           const labels = new Set();
           
           // Label based on keywords in title and body
-          const content = `${title.toLowerCase()} ${body.toLowerCase()}`;
+          const content = `${(title || '').toLowerCase()} ${(body || '').toLowerCase()}`;
           if (content.includes('bug') || content.includes('fix')) {
             labels.add('bug');
           }
