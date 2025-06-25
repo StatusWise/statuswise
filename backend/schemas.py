@@ -72,7 +72,7 @@ class AdminSubscriptionOut(BaseModel):
     billing_anchor: Optional[datetime.datetime]
     created_at: datetime.datetime
     updated_at: datetime.datetime
-    
+
     # Related user info
     user_email: Optional[str] = None
 

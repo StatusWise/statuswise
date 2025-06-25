@@ -2,17 +2,21 @@ import datetime
 import os
 from typing import Optional
 
-import bleach
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import func, IntegrityError
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import auth
 import models
 import schemas
-from authorization import require_incident_access, require_project_access, require_admin_access
+from authorization import (
+    require_admin_access,
+    require_incident_access,
+    require_project_access,
+)
 from database import SessionLocal, engine
 from lemonsqueezy_service import LemonSqueezyService
 
@@ -557,22 +561,30 @@ def get_admin_stats(
     Requires admin privileges.
     """
     require_admin_access(user)
-    
+
     # User statistics
     total_users = db.query(func.count(models.User.id)).scalar()
-    active_users = db.query(func.count(models.User.id)).filter(models.User.is_active == True).scalar()
-    pro_subscribers = db.query(func.count(models.User.id)).filter(
-        models.User.subscription_tier == models.SubscriptionTier.PRO
-    ).scalar()
+    active_users = (
+        db.query(func.count(models.User.id))
+        .filter(models.User.is_active.is_(True))
+        .scalar()
+    )
+    pro_subscribers = (
+        db.query(func.count(models.User.id))
+        .filter(models.User.subscription_tier == models.SubscriptionTier.PRO)
+        .scalar()
+    )
     free_users = total_users - pro_subscribers
-    
+
     # Project and incident statistics
     total_projects = db.query(func.count(models.Project.id)).scalar()
     total_incidents = db.query(func.count(models.Incident.id)).scalar()
-    unresolved_incidents = db.query(func.count(models.Incident.id)).filter(
-        models.Incident.resolved == False
-    ).scalar()
-    
+    unresolved_incidents = (
+        db.query(func.count(models.Incident.id))
+        .filter(models.Incident.resolved.is_(False))
+        .scalar()
+    )
+
     return {
         "total_users": total_users,
         "active_users": active_users,
@@ -604,7 +616,7 @@ def get_admin_users(
     Requires admin privileges.
     """
     require_admin_access(user)
-    
+
     return (
         db.query(models.User)
         .order_by(models.User.created_at.desc())
@@ -614,7 +626,11 @@ def get_admin_users(
     )
 
 
-@app.get("/admin/subscriptions", response_model=list[schemas.AdminSubscriptionOut], tags=["admin"])
+@app.get(
+    "/admin/subscriptions",
+    response_model=list[schemas.AdminSubscriptionOut],
+    tags=["admin"],
+)
 def get_admin_subscriptions(
     skip: int = 0,
     limit: int = 100,
@@ -633,7 +649,7 @@ def get_admin_subscriptions(
     Requires admin privileges.
     """
     require_admin_access(user)
-    
+
     subscriptions = (
         db.query(models.Subscription)
         .join(models.User)
@@ -642,18 +658,20 @@ def get_admin_subscriptions(
         .limit(min(limit, 100))
         .all()
     )
-    
+
     # Add user email to subscription data
     result = []
     for sub in subscriptions:
         sub_dict = schemas.AdminSubscriptionOut.model_validate(sub).model_dump()
         sub_dict["user_email"] = sub.user.email
         result.append(schemas.AdminSubscriptionOut(**sub_dict))
-    
+
     return result
 
 
-@app.get("/admin/projects", response_model=list[schemas.AdminProjectOut], tags=["admin"])
+@app.get(
+    "/admin/projects", response_model=list[schemas.AdminProjectOut], tags=["admin"]
+)
 def get_admin_projects(
     skip: int = 0,
     limit: int = 100,
@@ -672,14 +690,14 @@ def get_admin_projects(
     Requires admin privileges.
     """
     require_admin_access(user)
-    
+
     projects = (
         db.query(
             models.Project,
             models.User.email.label("owner_email"),
             func.count(models.Incident.id).label("incidents_count"),
             func.count(
-                models.Incident.id.filter(models.Incident.resolved == False)
+                models.Incident.id.filter(models.Incident.resolved.is_(False))
             ).label("unresolved_incidents_count"),
         )
         .join(models.User, models.Project.owner_id == models.User.id)
@@ -690,7 +708,7 @@ def get_admin_projects(
         .limit(min(limit, 100))
         .all()
     )
-    
+
     result = []
     for project, owner_email, incidents_count, unresolved_count in projects:
         project_dict = {
@@ -702,7 +720,7 @@ def get_admin_projects(
             "unresolved_incidents_count": unresolved_count,
         }
         result.append(schemas.AdminProjectOut(**project_dict))
-    
+
     return result
 
 
@@ -723,15 +741,17 @@ def get_admin_user(
     Requires admin privileges.
     """
     require_admin_access(current_user)
-    
+
     target_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     return target_user
 
 
-@app.patch("/admin/users/{user_id}", response_model=schemas.AdminUserOut, tags=["admin"])
+@app.patch(
+    "/admin/users/{user_id}", response_model=schemas.AdminUserOut, tags=["admin"]
+)
 def update_admin_user(
     user_id: int,
     is_active: Optional[bool] = None,
@@ -751,27 +771,27 @@ def update_admin_user(
     Requires admin privileges.
     """
     require_admin_access(current_user)
-    
+
     target_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     # Prevent self-demotion from admin
     if user_id == current_user.id and is_admin is False:
         raise HTTPException(
             status_code=400, detail="Cannot remove admin privileges from yourself"
         )
-    
+
     if is_active is not None:
         target_user.is_active = is_active
-    
+
     if is_admin is not None:
         target_user.is_admin = is_admin
-    
+
     target_user.updated_at = datetime.datetime.now(datetime.timezone.utc)
     db.commit()
     db.refresh(target_user)
-    
+
     return target_user
 
 
@@ -795,12 +815,12 @@ def get_admin_incidents(
     Requires admin privileges.
     """
     require_admin_access(user)
-    
+
     query = db.query(models.Incident)
-    
+
     if resolved is not None:
         query = query.filter(models.Incident.resolved == resolved)
-    
+
     return (
         query.order_by(models.Incident.created_at.desc())
         .offset(skip)
