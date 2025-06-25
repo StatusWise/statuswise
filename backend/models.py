@@ -30,12 +30,23 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
 
     # Lemon Squeezy fields
     lemonsqueezy_customer_id = Column(String, nullable=True, unique=True)
     subscription_tier = Column(SQLEnum(SubscriptionTier), default=SubscriptionTier.FREE)
     subscription_status = Column(SQLEnum(SubscriptionStatus), nullable=True)
     subscription_expires_at = Column(DateTime, nullable=True)
+
+    # Timestamps
+    created_at = Column(
+        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+    )
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
 
     # Relationships
     subscription = relationship("Subscription", back_populates="user", uselist=False)

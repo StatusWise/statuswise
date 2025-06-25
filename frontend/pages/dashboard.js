@@ -40,6 +40,7 @@ export default function Dashboard() {
   const [selectedProject, setSelectedProject] = useState(null)
   const [incidents, setIncidents] = useState([])
   const [subscription, setSubscription] = useState(null)
+  const [currentUser, setCurrentUser] = useState(null)
   const [error, setError] = useState('')
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : ''
@@ -68,6 +69,21 @@ export default function Dashboard() {
     }
   }, [token])
 
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      // We need to create a /me endpoint or get user info from token
+      // For now, we'll check admin status by trying to access admin stats
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/stats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      // If successful, user is admin
+      setCurrentUser({ is_admin: true })
+    } catch (error) {
+      // If failed, user is not admin
+      setCurrentUser({ is_admin: false })
+    }
+  }, [token])
+
   const fetchProjects = useCallback(async () => {
     try {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/projects/`, {
@@ -91,8 +107,9 @@ export default function Dashboard() {
     else {
       fetchProjects()
       fetchSubscriptionStatus()
+      fetchCurrentUser()
     }
-  }, [token, router, fetchProjects, fetchSubscriptionStatus])
+  }, [token, router, fetchProjects, fetchSubscriptionStatus, fetchCurrentUser])
 
   // Check for subscription success/cancel messages
   useEffect(() => {
@@ -220,6 +237,14 @@ export default function Dashboard() {
                 </button>
               )}
             </div>
+          )}
+          {currentUser?.is_admin && (
+            <button
+              onClick={() => router.push('/admin')}
+              className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600"
+            >
+              Admin Dashboard
+            </button>
           )}
           <button
             onClick={() => router.push('/subscription')}

@@ -1,5 +1,6 @@
 import datetime
 import os
+from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 import auth
 import models
 import schemas
-from authorization import require_incident_access, require_project_access
+from authorization import require_incident_access, require_project_access, require_admin_access
 from database import SessionLocal, engine
 from lemonsqueezy_service import LemonSqueezyService
 
@@ -81,6 +82,10 @@ app = FastAPI(
         {
             "name": "webhooks",
             "description": "Webhook endpoints for external services",
+        },
+        {
+            "name": "admin",
+            "description": "Admin-only endpoints for managing users, subscriptions, and system stats",
         },
     ],
 )
@@ -530,4 +535,274 @@ def list_project_incidents(
 
     return (
         db.query(models.Incident).filter(models.Incident.project_id == project_id).all()
+    )
+
+
+# Admin endpoints
+@app.get("/admin/stats", response_model=schemas.AdminStatsOut, tags=["admin"])
+def get_admin_stats(
+    user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)
+):
+    """
+    Get system-wide statistics for admin dashboard.
+
+    Returns comprehensive statistics including user counts, subscription metrics,
+    project and incident counts, and revenue data.
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+    
+    from sqlalchemy import func
+    
+    # User statistics
+    total_users = db.query(func.count(models.User.id)).scalar()
+    active_users = db.query(func.count(models.User.id)).filter(models.User.is_active == True).scalar()
+    pro_subscribers = db.query(func.count(models.User.id)).filter(
+        models.User.subscription_tier == models.SubscriptionTier.PRO
+    ).scalar()
+    free_users = total_users - pro_subscribers
+    
+    # Project and incident statistics
+    total_projects = db.query(func.count(models.Project.id)).scalar()
+    total_incidents = db.query(func.count(models.Incident.id)).scalar()
+    unresolved_incidents = db.query(func.count(models.Incident.id)).filter(
+        models.Incident.resolved == False
+    ).scalar()
+    
+    return {
+        "total_users": total_users,
+        "active_users": active_users,
+        "pro_subscribers": pro_subscribers,
+        "free_users": free_users,
+        "total_projects": total_projects,
+        "total_incidents": total_incidents,
+        "unresolved_incidents": unresolved_incidents,
+        "monthly_revenue": None,  # Could be calculated from LemonSqueezy data
+    }
+
+
+@app.get("/admin/users", response_model=list[schemas.AdminUserOut], tags=["admin"])
+def get_admin_users(
+    skip: int = 0,
+    limit: int = 100,
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all users for admin management.
+
+    Returns a paginated list of all users with detailed information including
+    subscription status, creation dates, and admin flags.
+
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return (max 100)
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+    
+    return (
+        db.query(models.User)
+        .order_by(models.User.created_at.desc())
+        .offset(skip)
+        .limit(min(limit, 100))
+        .all()
+    )
+
+
+@app.get("/admin/subscriptions", response_model=list[schemas.AdminSubscriptionOut], tags=["admin"])
+def get_admin_subscriptions(
+    skip: int = 0,
+    limit: int = 100,
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all subscriptions for admin management.
+
+    Returns a paginated list of all subscriptions with detailed billing information
+    and associated user data.
+
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return (max 100)
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+    
+    subscriptions = (
+        db.query(models.Subscription)
+        .join(models.User)
+        .order_by(models.Subscription.created_at.desc())
+        .offset(skip)
+        .limit(min(limit, 100))
+        .all()
+    )
+    
+    # Add user email to subscription data
+    result = []
+    for sub in subscriptions:
+        sub_dict = schemas.AdminSubscriptionOut.model_validate(sub).model_dump()
+        sub_dict["user_email"] = sub.user.email
+        result.append(schemas.AdminSubscriptionOut(**sub_dict))
+    
+    return result
+
+
+@app.get("/admin/projects", response_model=list[schemas.AdminProjectOut], tags=["admin"])
+def get_admin_projects(
+    skip: int = 0,
+    limit: int = 100,
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all projects for admin management.
+
+    Returns a paginated list of all projects with owner information and
+    incident counts.
+
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return (max 100)
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+    
+    from sqlalchemy import func
+    
+    projects = (
+        db.query(
+            models.Project,
+            models.User.email.label("owner_email"),
+            func.count(models.Incident.id).label("incidents_count"),
+            func.count(
+                models.Incident.id.filter(models.Incident.resolved == False)
+            ).label("unresolved_incidents_count"),
+        )
+        .join(models.User, models.Project.owner_id == models.User.id)
+        .outerjoin(models.Incident, models.Project.id == models.Incident.project_id)
+        .group_by(models.Project.id, models.User.email)
+        .order_by(models.Project.id.desc())
+        .offset(skip)
+        .limit(min(limit, 100))
+        .all()
+    )
+    
+    result = []
+    for project, owner_email, incidents_count, unresolved_count in projects:
+        project_dict = {
+            "id": project.id,
+            "name": project.name,
+            "owner_id": project.owner_id,
+            "owner_email": owner_email,
+            "incidents_count": incidents_count,
+            "unresolved_incidents_count": unresolved_count,
+        }
+        result.append(schemas.AdminProjectOut(**project_dict))
+    
+    return result
+
+
+@app.get("/admin/users/{user_id}", response_model=schemas.AdminUserOut, tags=["admin"])
+def get_admin_user(
+    user_id: int,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get detailed information about a specific user.
+
+    Returns comprehensive user information including subscription details,
+    activity status, and administrative flags.
+
+    - **user_id**: ID of the user to retrieve
+
+    Requires admin privileges.
+    """
+    require_admin_access(current_user)
+    
+    target_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return target_user
+
+
+@app.patch("/admin/users/{user_id}", response_model=schemas.AdminUserOut, tags=["admin"])
+def update_admin_user(
+    user_id: int,
+    is_active: Optional[bool] = None,
+    is_admin: Optional[bool] = None,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update user status and permissions.
+
+    Allows admin to modify user active status and admin privileges.
+
+    - **user_id**: ID of the user to update
+    - **is_active**: Set user active status
+    - **is_admin**: Set user admin privileges
+
+    Requires admin privileges.
+    """
+    require_admin_access(current_user)
+    
+    target_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prevent self-demotion from admin
+    if user_id == current_user.id and is_admin is False:
+        raise HTTPException(
+            status_code=400, detail="Cannot remove admin privileges from yourself"
+        )
+    
+    if is_active is not None:
+        target_user.is_active = is_active
+    
+    if is_admin is not None:
+        target_user.is_admin = is_admin
+    
+    target_user.updated_at = datetime.datetime.now(datetime.timezone.utc)
+    db.commit()
+    db.refresh(target_user)
+    
+    return target_user
+
+
+@app.get("/admin/incidents", response_model=list[schemas.IncidentOut], tags=["admin"])
+def get_admin_incidents(
+    skip: int = 0,
+    limit: int = 100,
+    resolved: Optional[bool] = None,
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all incidents across all projects for admin management.
+
+    Returns a paginated list of incidents with optional filtering by resolution status.
+
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return (max 100)
+    - **resolved**: Filter by resolution status (true/false/null for all)
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+    
+    query = db.query(models.Incident)
+    
+    if resolved is not None:
+        query = query.filter(models.Incident.resolved == resolved)
+    
+    return (
+        query.order_by(models.Incident.created_at.desc())
+        .offset(skip)
+        .limit(min(limit, 100))
+        .all()
     )
