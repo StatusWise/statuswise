@@ -39,11 +39,12 @@ The StatusWise Admin Dashboard provides comprehensive administrative controls fo
 
 ### 1. Database Migration
 
-Run the migration script to add admin functionality to existing installations:
+Run the PostgreSQL migration script to add admin functionality to existing installations:
 
 ```bash
 cd backend
-python add_admin_migration.py
+source venv/bin/activate
+python postgres_admin_migration.py
 ```
 
 This will:
@@ -173,13 +174,16 @@ Authorization: Bearer {admin_token}
 
 ### Database Verification
 
-Verify admin setup in database:
+Verify admin setup in PostgreSQL database:
 ```sql
+-- Connect to your database
+psql $DATABASE_URL
+
 -- Check admin users
 SELECT id, email, is_admin, created_at FROM users WHERE is_admin = true;
 
 -- Check user table structure
-DESCRIBE users;
+\d users;
 ```
 
 ## Best Practices
