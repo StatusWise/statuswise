@@ -207,29 +207,105 @@ jobs:
 
     - name: Build and test with Docker Compose
       run: |
-        # Copy environment files
+        # Configure backend environment for Docker Compose
         cp backend/env.example backend/.env
+        # Override database URL for Docker Compose networking
+        sed -i 's|DATABASE_URL=.*|DATABASE_URL=postgresql://postgres:postgres@db:5432/statuswise|' backend/.env
+        sed -i 's|SECRET_KEY=.*|SECRET_KEY=test-secret-key-for-integration|' backend/.env
+        sed -i 's|JWT_SECRET=.*|JWT_SECRET=test-jwt-secret-for-integration|' backend/.env
+        sed -i 's|LEMONSQUEEZY_API_KEY=.*|LEMONSQUEEZY_API_KEY=test_key|' backend/.env
+        sed -i 's|LEMONSQUEEZY_WEBHOOK_SECRET=.*|LEMONSQUEEZY_WEBHOOK_SECRET=test_secret|' backend/.env
+        sed -i 's|LEMONSQUEEZY_PRO_VARIANT_ID=.*|LEMONSQUEEZY_PRO_VARIANT_ID=test_variant|' backend/.env
+        
+        # Configure frontend environment
         cp frontend/env.example frontend/.env
         
+        echo "📋 Backend .env configured for Docker:"
+        echo "DATABASE_URL=$(grep DATABASE_URL backend/.env)"
+        echo "JWT_SECRET=$(grep JWT_SECRET backend/.env)"
+        
         # Build and start services
+        echo "🏗️ Building Docker images..."
         docker compose build
+        
+        echo "🚀 Starting services..."
         docker compose up -d
         
-        # Wait for services to be ready
-        echo "Waiting for services to start..."
-        sleep 45
+        # Wait for backend service to be ready
+        echo "⏳ Waiting for backend service to be ready..."
+        max_attempts=60
+        attempt=1
         
-        # Health checks
-        curl -f http://localhost:8000/health || exit 1
-        curl -f http://localhost:3000 || exit 1
+        while [ $attempt -le $max_attempts ]; do
+          echo "Attempt $attempt of $max_attempts - checking backend health..."
+          
+          if curl -f http://localhost:8000/health > /dev/null 2>&1; then
+            echo "✅ Backend service is ready!"
+            break
+          else
+            echo "⚠️ Backend not ready yet..."
+            if [ $attempt -eq 30 ]; then
+              echo "🔍 Checking backend logs..."
+              docker compose logs backend
+            fi
+          fi
+          
+          if [ $attempt -eq $max_attempts ]; then
+            echo "❌ Backend service failed to become ready after $max_attempts attempts"
+            echo "🔍 Final logs check:"
+            docker compose logs
+            exit 1
+          fi
+          
+          sleep 5
+          attempt=$((attempt + 1))
+        done
+        
+        # Wait for frontend service to be ready
+        echo "⏳ Waiting for frontend service to be ready..."
+        max_attempts=30
+        attempt=1
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "Attempt $attempt of $max_attempts - checking frontend..."
+          
+          if curl -f http://localhost:3000 > /dev/null 2>&1; then
+            echo "✅ Frontend service is ready!"
+            break
+          else
+            echo "⚠️ Frontend not ready yet..."
+          fi
+          
+          if [ $attempt -eq $max_attempts ]; then
+            echo "❌ Frontend service failed to become ready after $max_attempts attempts"
+            echo "🔍 Frontend logs:"
+            docker compose logs frontend
+            exit 1
+          fi
+          
+          sleep 3
+          attempt=$((attempt + 1))
+        done
         
         # Basic integration tests
-        echo "Running integration tests..."
+        echo "🧪 Running integration tests..."
+        
+        # Test 1: Health checks
+        echo "Test 1: Health endpoints..."
+        curl -f http://localhost:8000/health || exit 1
+        curl -f http://localhost:3000 > /dev/null 2>&1 || exit 1
+        
+        # Test 2: API signup
+        echo "Test 2: User signup..."
         curl -X POST http://localhost:8000/signup \
           -H "Content-Type: application/json" \
           -d '{"email":"test@example.com","password":"testpass123"}' || exit 1
         
-        echo "✅ Integration tests passed!"
+        # Test 3: API root endpoint
+        echo "Test 3: API root endpoint..."
+        curl -f http://localhost:8000/ || exit 1
+        
+        echo "✅ All integration tests passed!"
 
     - name: Performance tests
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
