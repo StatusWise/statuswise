@@ -2,10 +2,11 @@ import datetime
 import os
 from typing import Optional
 
+import bleach
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, IntegrityError
 from sqlalchemy.orm import Session
 
 import auth
@@ -14,8 +15,6 @@ import schemas
 from authorization import require_incident_access, require_project_access, require_admin_access
 from database import SessionLocal, engine
 from lemonsqueezy_service import LemonSqueezyService
-
-models.Base.metadata.create_all(bind=engine)
 
 # Enhanced FastAPI app configuration with OpenAPI/Swagger metadata
 app = FastAPI(
@@ -97,6 +96,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def create_tables():
+    """Create database tables on startup (not during tests)"""
+    # Only create tables if not in test environment
+    if not os.getenv("TESTING"):
+        models.Base.metadata.create_all(bind=engine)
 
 
 def get_db():
@@ -227,8 +234,6 @@ def get_subscription_status(
     limits = LemonSqueezyService.get_subscription_limits(user.subscription_tier)
 
     # Get current usage
-    from sqlalchemy import func
-
     project_count = (
         db.query(func.count(models.Project.id))
         .filter(models.Project.owner_id == user.id)
@@ -553,8 +558,6 @@ def get_admin_stats(
     """
     require_admin_access(user)
     
-    from sqlalchemy import func
-    
     # User statistics
     total_users = db.query(func.count(models.User.id)).scalar()
     active_users = db.query(func.count(models.User.id)).filter(models.User.is_active == True).scalar()
@@ -669,8 +672,6 @@ def get_admin_projects(
     Requires admin privileges.
     """
     require_admin_access(user)
-    
-    from sqlalchemy import func
     
     projects = (
         db.query(
