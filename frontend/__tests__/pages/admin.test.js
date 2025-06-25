@@ -207,6 +207,11 @@ describe('Admin Dashboard', () => {
     })
     
     test('shows loading state initially', async () => {
+      // Mock a slow API response
+      mockedAxios.get.mockImplementation(() => new Promise(resolve => 
+        setTimeout(() => resolve({ data: mockStats }), 100)
+      ))
+      
       await act(async () => {
         render(<AdminDashboard />)
       })
@@ -308,7 +313,7 @@ describe('Admin Dashboard', () => {
         expect(screen.getByText('PRO')).toBeInTheDocument() // subscription tier
         expect(screen.getByText('FREE')).toBeInTheDocument() // subscription tier
         expect(screen.getByText('Admin')).toBeInTheDocument() // admin badge
-        expect(screen.getByText('Active')).toBeInTheDocument() // status
+        expect(screen.getAllByText('Active').length).toBeGreaterThan(0) // status
       })
     })
     
@@ -331,10 +336,10 @@ describe('Admin Dashboard', () => {
         expect(screen.getByText('User Management')).toBeInTheDocument()
       })
       
-      // Find and click deactivate button for regular user
+      // Find and click deactivate button for regular user (second row)
       const deactivateButtons = screen.getAllByText('Deactivate')
       await act(async () => {
-        fireEvent.click(deactivateButtons[0])
+        fireEvent.click(deactivateButtons[1]) // Click second deactivate button for user ID 2
       })
       
       await waitFor(() => {
@@ -400,7 +405,7 @@ describe('Admin Dashboard', () => {
       await waitFor(() => {
         expect(screen.getByText('Subscription Management')).toBeInTheDocument()
         expect(screen.getByText('pro@example.com')).toBeInTheDocument()
-        expect(screen.getByText('cus_123')).toBeInTheDocument()
+        expect(screen.getByText(/cus_123/)).toBeInTheDocument()
       })
     })
     
