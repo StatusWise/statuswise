@@ -36,19 +36,41 @@ def run_migration():
     try:
         # Check if migration is needed
         with engine.begin() as conn:
-            # Check if users table exists first
-            result = conn.execute(text("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name='users'
-            """)).fetchone()
-            
-            if not result:
-                print("✗ Error: Users table not found. Please run the application first to create tables.")
-                sys.exit(1)
-            
-            # Check if is_admin column exists (SQLite specific)
-            result = conn.execute(text("PRAGMA table_info(users)")).fetchall()
-            column_names = [row[1] for row in result]  # Column name is at index 1
+            # Detect database type
+            if DATABASE_URL.startswith("postgresql"):
+                # PostgreSQL
+                result = conn.execute(text("""
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = 'public' AND table_name = 'users'
+                """)).fetchone()
+                
+                if not result:
+                    print("✗ Error: Users table not found. Please run the application first to create tables.")
+                    sys.exit(1)
+                
+                # Get column names for PostgreSQL
+                result = conn.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'users' AND table_schema = 'public'
+                """)).fetchall()
+                column_names = [row[0] for row in result]
+                
+            else:
+                # SQLite
+                result = conn.execute(text("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name='users'
+                """)).fetchone()
+                
+                if not result:
+                    print("✗ Error: Users table not found. Please run the application first to create tables.")
+                    sys.exit(1)
+                
+                # Get column names for SQLite
+                result = conn.execute(text("PRAGMA table_info(users)")).fetchall()
+                column_names = [row[1] for row in result]  # Column name is at index 1
             
             print(f"Found users table with columns: {', '.join(column_names)}")
             
