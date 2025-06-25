@@ -73,12 +73,12 @@ export default function Dashboard() {
     try {
       // We need to create a /me endpoint or get user info from token
       // For now, we'll check admin status by trying to access admin stats
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/stats`, {
+      await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/stats`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       // If successful, user is admin
       setCurrentUser({ is_admin: true })
-    } catch (error) {
+    } catch {
       // If failed, user is not admin
       setCurrentUser({ is_admin: false })
     }

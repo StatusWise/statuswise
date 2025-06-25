@@ -1,6 +1,5 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import axios from 'axios'
 import { useRouter } from 'next/router'
 import AdminDashboard from '../../pages/admin'
@@ -120,7 +119,7 @@ describe('Admin Dashboard', () => {
   ]
   
   // Helper function to create mock API responses
-  const createMockImplementation = (tab = 'overview') => {
+  const createMockImplementation = () => {
     return (url) => {
       if (url.includes('/admin/stats')) {
         return Promise.resolve({ data: mockStats })
