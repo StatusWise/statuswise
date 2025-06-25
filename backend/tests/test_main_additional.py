@@ -1,6 +1,9 @@
 import os
 from unittest.mock import patch
 
+# Set testing environment variable before importing main
+os.environ["TESTING"] = "1"
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

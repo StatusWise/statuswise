@@ -108,3 +108,12 @@ def require_incident_access(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied to this incident",
             )
+
+
+def require_admin_access(user: User):
+    """Require that the current user has admin privileges."""
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )

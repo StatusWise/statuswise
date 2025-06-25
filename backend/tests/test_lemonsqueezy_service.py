@@ -3,6 +3,9 @@ import hmac
 import os
 from unittest.mock import MagicMock, patch
 
+# Set testing environment variable before importing main
+os.environ["TESTING"] = "1"
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

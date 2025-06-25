@@ -44,6 +44,63 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AdminUserOut(BaseModel):
+    id: int
+    email: str
+    is_active: bool
+    is_admin: bool
+    subscription_tier: SubscriptionTier
+    subscription_status: Optional[SubscriptionStatus]
+    subscription_expires_at: Optional[datetime.datetime]
+    lemonsqueezy_customer_id: Optional[str]
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminSubscriptionOut(BaseModel):
+    id: int
+    user_id: int
+    lemonsqueezy_subscription_id: str
+    lemonsqueezy_customer_id: str
+    lemonsqueezy_variant_id: str
+    lemonsqueezy_order_id: Optional[str]
+    tier: SubscriptionTier
+    status: SubscriptionStatus
+    trial_ends_at: Optional[datetime.datetime]
+    billing_anchor: Optional[datetime.datetime]
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+    # Related user info
+    user_email: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminProjectOut(BaseModel):
+    id: int
+    name: str
+    owner_id: int
+    owner_email: Optional[str] = None
+    incidents_count: Optional[int] = None
+    unresolved_incidents_count: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminStatsOut(BaseModel):
+    total_users: int
+    active_users: int
+    pro_subscribers: int
+    free_users: int
+    total_projects: int
+    total_incidents: int
+    unresolved_incidents: int
+    monthly_revenue: Optional[float] = None
+
+
 class SubscriptionStatusResponse(BaseModel):
     tier: SubscriptionTier
     status: Optional[SubscriptionStatus]

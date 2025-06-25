@@ -1,4 +1,8 @@
 import datetime
+import os
+
+# Set testing environment variable before importing main
+os.environ["TESTING"] = "1"
 
 import pytest
 from fastapi.testclient import TestClient
