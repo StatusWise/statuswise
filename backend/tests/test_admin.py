@@ -4,9 +4,9 @@ import os
 # Set testing environment variables before importing main
 os.environ["TESTING"] = "1"
 os.environ["ENABLE_ADMIN"] = "true"  # Enable admin functionality for admin tests
-os.environ["ENABLE_BILLING"] = (
-    "true"  # Enable billing for subscription-related admin features
-)
+os.environ[
+    "ENABLE_BILLING"
+] = "true"  # Enable billing for subscription-related admin features
 
 import pytest
 from fastapi.testclient import TestClient

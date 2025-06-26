@@ -1,4 +1,5 @@
 import os
+from unittest.mock import patch
 
 # Set environment variables for admin-enabled tests BEFORE importing anything
 os.environ["TESTING"] = "1"
