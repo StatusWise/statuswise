@@ -30,15 +30,15 @@ StatusWise provides a powerful, self-hostable alternative to services like Statu
 
 StatusWise is built with a modern, robust, and scalable technology stack.
 
-*   **Backend**: **Python 3.9+** with **FastAPI** for high-performance API services.
+*   **Backend**: **Python 3.11+** with **FastAPI** for high-performance API services.
     *   Database ORM: **SQLAlchemy**
     *   Authentication: **python-jose** for JWT tokens
-*   **Frontend**: **Next.js 14+** (React) for a fast, modern user interface.
+*   **Frontend**: **Next.js 15+** (React) for a fast, modern user interface.
     *   Styling: **Tailwind CSS** for utility-first CSS
     *   Testing: **Jest** and **React Testing Library**
 *   **Database**: **PostgreSQL** for reliable and robust data storage.
 *   **Deployment**: **Docker Compose** for easy, reproducible local and production deployments.
-*   **Billing**: **Stripe** for subscription management in the SaaS version.
+*   **Billing**: **Lemon Squeezy** for subscription management in the SaaS version.
 
 ---
 
@@ -69,6 +69,51 @@ docker compose up --build -d
 **4. Access your instance:**
 *   **Admin UI**: [http://localhost:3000](http://localhost:3000)
 *   **API**: [http://localhost:8000/docs](http://localhost:8000/docs) (Interactive API documentation)
+
+---
+
+## ⚙️ Feature Toggles
+
+StatusWise supports configurable features that can be enabled or disabled based on your deployment needs:
+
+### Environment Variables
+
+```bash
+# Feature Toggles (default: false for secure-by-default)
+ENABLE_BILLING=false    # Enable subscription management and billing
+ENABLE_ADMIN=false      # Enable admin dashboard and user management
+```
+
+### Deployment Scenarios
+
+**Personal/Internal Use:**
+```bash
+ENABLE_BILLING=false
+ENABLE_ADMIN=true
+```
+- No subscription limits (unlimited projects)
+- Admin functionality for user management
+- No payment processing required
+
+**SaaS Deployment:**
+```bash
+ENABLE_BILLING=true
+ENABLE_ADMIN=true
+```
+- Full subscription management with Lemon Squeezy
+- Admin dashboard for system management
+- Project limits based on subscription tiers
+
+**Simple Status Page:**
+```bash
+ENABLE_BILLING=false
+ENABLE_ADMIN=false
+```
+- Core incident management only
+- No user management overhead
+- Perfect for single-team usage
+
+For detailed configuration instructions, see [`docs/FEATURE_TOGGLES.md`](./docs/FEATURE_TOGGLES.md).
 
 ---
 
@@ -105,9 +150,13 @@ StatusWise is open-source and licensed under the **MIT License**.
 
 ## 📚 Documentation
 
-Detailed documentation for our GitHub Actions workflows and other development processes can be found in the [`docs/`](./docs) directory.
+Comprehensive documentation for setup, configuration, and development can be found in the [`docs/`](./docs) directory:
 
-- [**GitHub Actions Workflows**](./docs/actions_workflows.md)
+- [**Feature Toggles**](./docs/FEATURE_TOGGLES.md) - Configure billing and admin features
+- [**Admin Dashboard**](./docs/ADMIN_DASHBOARD.md) - Admin interface setup and usage
+- [**Testing Guide**](./docs/TESTING.md) - Testing strategy and running tests
+- [**Development Guide**](./docs/DEVELOPMENT.md) - Development setup and workflows
+- [**GitHub Actions Workflows**](./docs/actions_workflows.md) - CI/CD pipeline documentation
 
 ---
 
