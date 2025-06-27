@@ -4,9 +4,7 @@ from unittest.mock import patch
 # Set testing environment variable before importing main
 os.environ["TESTING"] = "1"
 
-import pytest
 
-from config import Config
 
 
 class TestConfig:
@@ -230,7 +228,7 @@ class TestConfig:
             os.environ,
             {
                 "DATABASE_URL": "test_db",
-                "SECRET_KEY": "secure_secret"
+                "SECRET_KEY": "secure_secret",
                 # JWT_SECRET will use default which should fail
             },
             clear=True,

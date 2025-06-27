@@ -138,7 +138,7 @@ class TestBillingEnabledSignup:
 
     @patch("lemonsqueezy_service.LemonSqueezyService.create_customer")
     def test_signup_customer_creation_fails(self, mock_create_customer):
-        """Test signup when customer creation fails but signup still succeeds when billing enabled"""
+        """Signup should succeed even if Lemon Squeezy customer creation fails (billing enabled)"""
         mock_create_customer.side_effect = Exception("API Error")
 
         response = client.post(

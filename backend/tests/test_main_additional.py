@@ -1,5 +1,5 @@
 import os
-from unittest.mock import patch
+
 
 # Set testing environment variable before importing main
 os.environ["TESTING"] = "1"

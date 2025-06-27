@@ -45,9 +45,15 @@ test-backend-fast: ## Run backend tests in parallel (may have isolation issues)
 
 test-backend-coverage: ## Run backend tests with coverage report
 	@echo "🧪 Running backend tests with coverage..."
+	@cd backend && python -m pytest tests/test_admin_authorization.py --cov=admin_authorization --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_admin.py --cov=admin --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_auth.py --cov=auth --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_config.py --cov=config --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_feature_toggles.py --cov=feature_toggles --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_lemonsqueezy_service.py --cov=lemonsqueezy_service --cov-append --tb=short
-	@cd backend && python -m pytest tests/test_main_additional.py --cov=. --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_main_admin_enabled.py --cov=main_admin_enabled --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_main_billing_enabled.py --cov=main_billing_enabled --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_main_additional.py --cov=main_additional --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_main.py --cov=main --cov-append --tb=short --cov-report=html --cov-report=term-missing
 	@echo "✅ Coverage report generated in backend/htmlcov/"
 

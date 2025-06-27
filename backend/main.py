@@ -1,5 +1,4 @@
 import datetime
-import os
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, status
@@ -26,9 +25,9 @@ app = FastAPI(
     title="StatusWise API",
     description="""
     StatusWise is a comprehensive incident management and status page platform.
-    
+
     ## Features
-    
+
     * **User Management**: User registration, authentication, and subscription management
     * **Project Management**: Create and manage multiple status page projects
     * **Incident Management**: Create, track, and resolve incidents
@@ -88,7 +87,10 @@ app = FastAPI(
         },
         {
             "name": "subscription",
-            "description": "Subscription management and billing operations (requires ENABLE_BILLING=true)",
+            "description": (
+                "Subscription management and billing operations "
+                "(requires ENABLE_BILLING=true)"
+            ),
         },
         {
             "name": "projects",
@@ -104,11 +106,17 @@ app = FastAPI(
         },
         {
             "name": "webhooks",
-            "description": "Webhook endpoints for external services (requires ENABLE_BILLING=true)",
+            "description": (
+                "Webhook endpoints for external services "
+                "(requires ENABLE_BILLING=true)"
+            ),
         },
         {
             "name": "admin",
-            "description": "Admin-only endpoints for managing users, subscriptions, and system stats (requires ENABLE_ADMIN=true)",
+            "description": (
+                "Admin-only endpoints for managing users, subscriptions, "
+                "and system stats (requires ENABLE_ADMIN=true)"
+            ),
         },
     ],
 )
@@ -138,10 +146,10 @@ def create_tables():
 
     # Log feature toggle status
     print(f"🔧 Feature Toggles:")
-    print(
-        f"  - Billing: {'✅ Enabled' if config.is_billing_enabled() else '❌ Disabled'}"
-    )
-    print(f"  - Admin: {'✅ Enabled' if config.is_admin_enabled() else '❌ Disabled'}")
+    billing_status = "✅ Enabled" if config.is_billing_enabled() else "❌ Disabled"
+    admin_status = "✅ Enabled" if config.is_admin_enabled() else "❌ Disabled"
+    print(f"  - Billing: {billing_status}")
+    print(f"  - Admin: {admin_status}")
 
 
 def get_db():
@@ -387,7 +395,7 @@ if config.is_billing_enabled():
             checkout_url = LemonSqueezyService.create_checkout_url(
                 variant_id=variant_id,
                 customer_email=user.email,
-                success_url=f"{config.FRONTEND_URL}/dashboard?subscription=success",
+                success_url=(f"{config.FRONTEND_URL}/dashboard?subscription=success"),
                 user_id=user.id,
             )
 
@@ -416,7 +424,8 @@ else:
         Returns an error indicating billing is not available.
         """
         raise HTTPException(
-            status_code=503, detail="Billing functionality is disabled on this instance"
+            status_code=503,
+            detail="Billing functionality is disabled on this instance",
         )
 
 
@@ -469,7 +478,8 @@ else:
         Returns an error indicating webhooks are not available.
         """
         raise HTTPException(
-            status_code=503, detail="Billing webhooks are disabled on this instance"
+            status_code=503,
+            detail="Billing webhooks are disabled on this instance",
         )
 
 
