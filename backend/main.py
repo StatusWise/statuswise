@@ -3,9 +3,7 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import case, func
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import auth
@@ -160,78 +158,58 @@ def get_db():
         db.close()
 
 
-@app.post("/signup", response_model=schemas.UserOut, tags=["authentication"])
-def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
+@app.post("/auth/google", response_model=schemas.AuthResponse, tags=["authentication"])
+def google_auth(auth_request: schemas.GoogleAuthRequest, db: Session = Depends(get_db)):
     """
-    Register a new user account.
+    Authenticate user with Google OAuth token.
 
-    Creates a new user with the provided email and password.
-    Optionally creates a Lemon Squeezy customer record for billing.
+    Verifies the Google OAuth ID token and creates/updates the user account.
+    Returns a JWT access token for subsequent API requests.
 
-    - **email**: Must be a valid email address
-    - **password**: User's password (will be hashed before storage)
+    - **google_token**: Google OAuth ID token from the frontend
 
-    Returns the created user information including subscription details.
+    Returns an access token, token type, and user information.
     """
-    # Check if user already exists
-    existing_user = (
-        db.query(models.User).filter(models.User.email == user.email).first()
-    )
-    if existing_user:
+    # Verify Google token
+    google_user_info = auth.verify_google_token(auth_request.google_token)
+    if not google_user_info:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email already exists",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google token",
         )
 
-    hashed_password = auth.get_password_hash(user.password)
-    db_user = models.User(email=user.email, hashed_password=hashed_password)
+    if not google_user_info.get("email_verified", False):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google email not verified",
+        )
 
     try:
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
+        # Get or create user from Google OAuth data
+        user = auth.get_or_create_user_from_google(google_user_info, db)
 
         # Create Lemon Squeezy customer for new user (optional)
-        try:
-            customer_id = LemonSqueezyService.create_customer(user.email)
-            if customer_id:
-                db_user.lemonsqueezy_customer_id = customer_id
-                db.commit()
-        except Exception as e:
-            print(f"Failed to create Lemon Squeezy customer: {str(e)}")
-            # Don't fail signup if customer creation fails
+        if not user.lemonsqueezy_customer_id:
+            try:
+                customer_id = LemonSqueezyService.create_customer(user.email)
+                if customer_id:
+                    user.lemonsqueezy_customer_id = customer_id
+                    db.commit()
+            except Exception as e:
+                print(f"Failed to create Lemon Squeezy customer: {str(e)}")
+                # Don't fail authentication if customer creation fails
 
-        return db_user
-    except IntegrityError:
+        # Create JWT token
+        token = auth.create_access_token({"sub": user.email})
+
+        return {"access_token": token, "token_type": "bearer", "user": user}
+    except Exception as e:
         db.rollback()
+        print(f"Authentication error: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email already exists",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication failed",
         )
-
-
-@app.post("/login", tags=["authentication"])
-def login(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
-):
-    """
-    Authenticate user and return access token.
-
-    Use this endpoint to authenticate with email and password.
-    Returns a Bearer token that should be included in subsequent requests.
-
-    - **username**: User's email address
-    - **password**: User's password
-
-    Returns an access token and token type.
-    """
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
-    if not user or not auth.verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
-        )
-    token = auth.create_access_token({"sub": user.email})
-    return {"access_token": token, "token_type": "bearer"}
 
 
 @app.get("/", tags=["health"])
@@ -509,7 +487,7 @@ def create_project(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                f"Project limit reached. {user.subscription_tier.value} tier "
+                f"{user.subscription_tier.value} tier "
                 f"allows {limits['max_projects']} projects. "
                 f"Upgrade to Pro for more projects."
             ),
@@ -568,7 +546,7 @@ def create_incident(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                f"Incident limit reached. {user.subscription_tier.value} tier "
+                f"{user.subscription_tier.value} tier "
                 f"allows {limits['max_incidents_per_project']} incidents per "
                 f"project. Upgrade to Pro for more incidents."
             ),

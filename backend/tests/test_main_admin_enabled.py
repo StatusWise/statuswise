@@ -1,16 +1,17 @@
 import os
 
-# Set environment variables for admin-enabled tests BEFORE importing anything
+# Set testing environment variable before importing main
 os.environ["TESTING"] = "1"
-os.environ["ENABLE_ADMIN"] = "true"
+os.environ["ENABLE_ADMIN"] = "true"  # Enable admin functionality for admin tests
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from test_helpers import create_test_user
 
-from auth import get_password_hash
+from auth import create_access_token
 from database import Base, override_engine
 from main import app, get_db
 from models import SubscriptionStatus, SubscriptionTier, User
@@ -66,12 +67,13 @@ def clean_database():
 @pytest.fixture
 def admin_user():
     db = TestingSessionLocal()
-    user = User(
+    user = create_test_user(
         email="admin@example.com",
-        hashed_password=get_password_hash("adminpassword"),
+        name="Admin User",
+        google_id="admin_google_123",
+        is_admin=True,
         subscription_tier=SubscriptionTier.FREE,
         subscription_status=SubscriptionStatus.ACTIVE,
-        is_admin=True,
     )
     db.add(user)
     db.commit()
@@ -82,10 +84,7 @@ def admin_user():
 
 @pytest.fixture
 def admin_auth_headers(admin_user):
-    response = client.post(
-        "/login", data={"username": "admin@example.com", "password": "adminpassword"}
-    )
-    token = response.json()["access_token"]
+    token = create_access_token({"sub": admin_user.email})
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -131,9 +130,10 @@ class TestAdminEnabledEndpoints:
         """Test admin user update endpoint when admin is enabled"""
         # Create a regular user to update
         db = TestingSessionLocal()
-        regular_user = User(
+        regular_user = create_test_user(
             email="regular@example.com",
-            hashed_password=get_password_hash("password"),
+            name="Regular User",
+            google_id="regular_google_123",
             subscription_tier=SubscriptionTier.FREE,
             subscription_status=SubscriptionStatus.ACTIVE,
             is_active=True,
@@ -183,22 +183,22 @@ class TestAdminEnabledEndpoints:
         """Test that non-admin users cannot access admin endpoints"""
         # Create a regular user
         db = TestingSessionLocal()
-        regular_user = User(
+        regular_user = create_test_user(
             email="regular@example.com",
-            hashed_password=get_password_hash("password"),
+            name="Regular User",
+            google_id="regular_google_456",
             subscription_tier=SubscriptionTier.FREE,
             subscription_status=SubscriptionStatus.ACTIVE,
             is_admin=False,
         )
         db.add(regular_user)
         db.commit()
+        # Store email before closing session
+        user_email = regular_user.email
         db.close()
 
-        # Login as regular user
-        response = client.post(
-            "/login", data={"username": "regular@example.com", "password": "password"}
-        )
-        token = response.json()["access_token"]
+        # Create auth token for regular user
+        token = create_access_token({"sub": user_email})
         regular_headers = {"Authorization": f"Bearer {token}"}
 
         # Try to access admin endpoint

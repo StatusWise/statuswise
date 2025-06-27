@@ -30,7 +30,6 @@ test-backend: ## Run backend tests with proper isolation (file by file)
 	@echo "🧪 Running backend tests with proper isolation..."
 	@cd backend && echo "Testing admin auth endpoints..." && python -m pytest tests/test_admin_authorization.py -v --tb=short
 	@cd backend && echo "Testing admin endpoints..." && python -m pytest tests/test_admin.py -v --tb=short
-	@cd backend && echo "Testing auth module..." && python -m pytest tests/test_auth.py -v --tb=short
 	@cd backend && echo "Testing config module..." && python -m pytest tests/test_config.py -v --tb=short
 	@cd backend && echo "Testing feature toggles..." && python -m pytest tests/test_feature_toggles.py -v --tb=short
 	@cd backend && echo "Testing LemonSqueezy service..." && python -m pytest tests/test_lemonsqueezy_service.py -v --tb=short
@@ -47,7 +46,6 @@ test-backend-coverage: ## Run backend tests with coverage report
 	@echo "🧪 Running backend tests with coverage..."
 	@cd backend && python -m pytest tests/test_admin_authorization.py --cov=admin_authorization --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_admin.py --cov=admin --cov-append --tb=short
-	@cd backend && python -m pytest tests/test_auth.py --cov=auth --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_config.py --cov=config --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_feature_toggles.py --cov=feature_toggles --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_lemonsqueezy_service.py --cov=lemonsqueezy_service --cov-append --tb=short
@@ -254,7 +252,6 @@ ci-test-backend: ## CI backend test command (with proper isolation)
 	@echo "🤖 Running backend tests for CI..."
 	@cd backend && python -m pytest tests/test_admin_authorization.py -v --tb=short --junitxml=test-results-admin-authorization.xml
 	@cd backend && python -m pytest tests/test_admin.py -v --tb=short --junitxml=test-results-admin.xml
-	@cd backend && python -m pytest tests/test_auth.py -v --tb=short --junitxml=test-results-auth.xml
 	@cd backend && python -m pytest tests/test_config.py -v --tb=short --junitxml=test-results-config.xml
 	@cd backend && python -m pytest tests/test_feature_toggles.py -v --tb=short --junitxml=test-results-feature-toggles.xml
 	@cd backend && python -m pytest tests/test_lemonsqueezy_service.py -v --tb=short --junitxml=test-results-lemonsqueezy.xml

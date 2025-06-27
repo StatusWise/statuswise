@@ -4,13 +4,14 @@ from unittest.mock import patch
 # Set testing environment variable before importing main
 os.environ["TESTING"] = "1"
 
-
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from test_helpers import create_test_user
 
-from auth import get_password_hash
+from auth import create_access_token
 from database import Base, override_engine
 from models import User
 
@@ -103,19 +104,15 @@ class TestFeatureToggles:
         app.dependency_overrides[get_db] = override_get_db
         client = TestClient(app)
 
-        # Create a test user
+        # Create a test user with Google OAuth
         db = TestingSessionLocal()
-        test_user = User(
-            email="test@example.com", hashed_password=get_password_hash("testpass")
-        )
+        test_user = create_test_user(email="test@example.com")
         db.add(test_user)
         db.commit()
+        db.refresh(test_user)
 
-        # Login to get token
-        login_response = client.post(
-            "/login", data={"username": "test@example.com", "password": "testpass"}
-        )
-        token = login_response.json()["access_token"]
+        # Create JWT token directly instead of using login endpoint
+        token = create_access_token({"sub": test_user.email})
 
         response = client.get(
             "/subscription/status", headers={"Authorization": f"Bearer {token}"}
@@ -144,19 +141,15 @@ class TestFeatureToggles:
         app.dependency_overrides[get_db] = override_get_db
         client = TestClient(app)
 
-        # Create a test user
+        # Create a test user with Google OAuth
         db = TestingSessionLocal()
-        test_user = User(
-            email="test@example.com", hashed_password=get_password_hash("testpass")
-        )
+        test_user = create_test_user(email="test@example.com")
         db.add(test_user)
         db.commit()
+        db.refresh(test_user)
 
-        # Login to get token
-        login_response = client.post(
-            "/login", data={"username": "test@example.com", "password": "testpass"}
-        )
-        token = login_response.json()["access_token"]
+        # Create JWT token directly
+        token = create_access_token({"sub": test_user.email})
 
         response = client.post(
             "/subscription/create-checkout",
@@ -195,21 +188,18 @@ class TestFeatureToggles:
         app.dependency_overrides[get_db] = override_get_db
         client = TestClient(app)
 
-        # Create an admin user
+        # Create an admin user with Google OAuth
         db = TestingSessionLocal()
-        admin_user = User(
+        admin_user = create_test_user(
             email="admin@example.com",
-            hashed_password=get_password_hash("adminpass"),
             is_admin=True,
         )
         db.add(admin_user)
         db.commit()
+        db.refresh(admin_user)
 
-        # Login to get token
-        login_response = client.post(
-            "/login", data={"username": "admin@example.com", "password": "adminpass"}
-        )
-        token = login_response.json()["access_token"]
+        # Create JWT token directly
+        token = create_access_token({"sub": admin_user.email})
 
         response = client.get(
             "/admin/stats", headers={"Authorization": f"Bearer {token}"}
@@ -232,19 +222,15 @@ class TestFeatureToggles:
         app.dependency_overrides[get_db] = override_get_db
         client = TestClient(app)
 
-        # Create a test user
+        # Create a test user with Google OAuth
         db = TestingSessionLocal()
-        test_user = User(
-            email="test@example.com", hashed_password=get_password_hash("testpass")
-        )
+        test_user = create_test_user(email="test@example.com")
         db.add(test_user)
         db.commit()
+        db.refresh(test_user)
 
-        # Login to get token
-        login_response = client.post(
-            "/login", data={"username": "test@example.com", "password": "testpass"}
-        )
-        token = login_response.json()["access_token"]
+        # Create JWT token directly
+        token = create_access_token({"sub": test_user.email})
 
         # Health check should still work
         response = client.get("/health")
@@ -269,3 +255,7 @@ class TestFeatureToggles:
         assert response.status_code == 200
 
         db.close()
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

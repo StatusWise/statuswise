@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from test_helpers import create_test_user
 
 from database import Base
 from lemonsqueezy_service import LemonSqueezyService
@@ -43,10 +44,9 @@ def db_session():
 
 @pytest.fixture
 def test_user(db_session):
-    """Create a test user"""
-    user = User(
+    """Create a test user with Google OAuth"""
+    user = create_test_user(
         email="test@example.com",
-        hashed_password="hashed_password",
         subscription_tier=SubscriptionTier.FREE,
         subscription_status=SubscriptionStatus.ACTIVE,
     )

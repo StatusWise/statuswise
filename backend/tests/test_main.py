@@ -1,7 +1,7 @@
 import datetime
 import os
 
-# Set testing environment variable before importing main
+# Set testing environment variable before importing
 os.environ["TESTING"] = "1"
 
 import pytest
@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from test_helpers import create_test_user
 
-from auth import get_password_hash
 from database import Base, override_engine
 from main import app, get_db
 from models import Incident, Project, SubscriptionStatus, SubscriptionTier, User
@@ -74,9 +74,10 @@ def test_user():
         db.close()
         return existing_user
 
-    user = User(
+    user = create_test_user(
         email="test@example.com",
-        hashed_password=get_password_hash("testpassword"),
+        name="Test User",
+        google_id="test_google_123",
         subscription_tier=SubscriptionTier.FREE,
         subscription_status=SubscriptionStatus.ACTIVE,
     )
@@ -89,56 +90,38 @@ def test_user():
 
 @pytest.fixture
 def auth_headers(test_user):
-    response = client.post(
-        "/login", data={"username": "test@example.com", "password": "testpassword"}
-    )
-    token = response.json()["access_token"]
+    # Since we're using Google OAuth now, we need to create a JWT token directly
+    from auth import create_access_token
+
+    token = create_access_token({"sub": test_user.email})
     return {"Authorization": f"Bearer {token}"}
 
 
-class TestAuthentication:
-    def test_signup_success(self):
-        response = client.post(
-            "/signup", json={"email": "newuser@example.com", "password": "newpassword"}
-        )
+class TestConfiguration:
+    def test_config_endpoint(self):
+        """Test the configuration endpoint returns proper feature toggles"""
+        response = client.get("/config")
         assert response.status_code == 200
         data = response.json()
-        assert data["email"] == "newuser@example.com"
+        assert "billing_enabled" in data
+        assert "admin_enabled" in data
+        assert "features" in data
 
-    def test_signup_duplicate_user(self, test_user):
-        response = client.post(
-            "/signup", json={"email": "test@example.com", "password": "anotherpassword"}
-        )
-        assert response.status_code == 400
-        assert "already exists" in response.json()["detail"]
 
-    def test_signup_invalid_email(self):
-        response = client.post(
-            "/signup", json={"email": "invalid-email", "password": "password"}
-        )
-        assert response.status_code == 422
-
-    def test_login_success(self, test_user):
-        response = client.post(
-            "/login", data={"username": "test@example.com", "password": "testpassword"}
-        )
+class TestHealthEndpoints:
+    def test_root_endpoint(self):
+        """Test the root endpoint"""
+        response = client.get("/")
         assert response.status_code == 200
         data = response.json()
-        assert "access_token" in data
-        assert data["token_type"] == "bearer"
+        assert "message" in data
 
-    def test_login_invalid_credentials(self, test_user):
-        response = client.post(
-            "/login", data={"username": "test@example.com", "password": "wrongpassword"}
-        )
-        assert response.status_code == 401
-
-    def test_login_nonexistent_user(self):
-        response = client.post(
-            "/login",
-            data={"username": "nonexistent@example.com", "password": "password"},
-        )
-        assert response.status_code == 401
+    def test_health_endpoint(self):
+        """Test the health check endpoint"""
+        response = client.get("/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
 
 
 class TestProjects:

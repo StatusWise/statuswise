@@ -28,7 +28,9 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
+    name = Column(String, nullable=True)  # User's full name from Google
+    google_id = Column(String, unique=True, index=True)  # Google user ID
+    avatar_url = Column(String, nullable=True)  # Google profile picture
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
 

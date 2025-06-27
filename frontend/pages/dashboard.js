@@ -37,7 +37,7 @@ const incidentSchema = z.object({
 
 export default function Dashboard() {
   const router = useRouter()
-  const { isBillingEnabled, isAdminEnabled, isFeatureEnabled } = useContext(ConfigContext)
+  const { isBillingEnabled, isAdminEnabled } = useContext(ConfigContext)
   
   const [projects, setProjects] = useState([])
   const [selectedProject, setSelectedProject] = useState(null)
