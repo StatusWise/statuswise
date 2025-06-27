@@ -8,12 +8,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from test_helpers import create_test_user
 
+from auth import create_access_token
 from database import Base, override_engine
 from main import app, get_db
 from models import User
-from test_helpers import create_test_user
-from auth import create_access_token
 
 # Create in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -63,7 +63,11 @@ class TestAdditionalEndpoints:
         # Test without token (should fail)
         response = client.post("/auth/google", json={"token": "invalid"})
         # Should return error for invalid token, but endpoint should exist
-        assert response.status_code in [400, 401, 422]  # Invalid token, but endpoint exists
+        assert response.status_code in [
+            400,
+            401,
+            422,
+        ]  # Invalid token, but endpoint exists
 
     def test_protected_endpoint_requires_auth(self):
         """Test that protected endpoints require authentication."""
@@ -73,20 +77,22 @@ class TestAdditionalEndpoints:
     def test_protected_endpoint_with_valid_auth(self):
         """Test protected endpoint with valid authentication."""
         db = TestingSessionLocal()
-        
+
         # Create user
         user = create_test_user(email="test@example.com")
         db.add(user)
         db.commit()
         db.refresh(user)
-        
+
         # Create token
         token = create_access_token({"sub": user.email})
-        
+
         # Test protected endpoint
-        response = client.get("/projects/", headers={"Authorization": f"Bearer {token}"})
+        response = client.get(
+            "/projects/", headers={"Authorization": f"Bearer {token}"}
+        )
         assert response.status_code == 200
-        
+
         db.close()
 
 

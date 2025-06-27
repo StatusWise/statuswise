@@ -4,7 +4,6 @@ from typing import Optional
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import case, func
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import auth
@@ -488,7 +487,7 @@ def create_project(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                f"Project limit reached. {user.subscription_tier.value} tier "
+                f"{user.subscription_tier.value} tier "
                 f"allows {limits['max_projects']} projects. "
                 f"Upgrade to Pro for more projects."
             ),
@@ -547,7 +546,7 @@ def create_incident(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                f"Incident limit reached. {user.subscription_tier.value} tier "
+                f"{user.subscription_tier.value} tier "
                 f"allows {limits['max_incidents_per_project']} incidents per "
                 f"project. Upgrade to Pro for more incidents."
             ),

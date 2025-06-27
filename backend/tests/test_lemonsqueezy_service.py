@@ -10,11 +10,11 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from test_helpers import create_test_user
 
 from database import Base
 from lemonsqueezy_service import LemonSqueezyService
 from models import Subscription, SubscriptionStatus, SubscriptionTier, User
-from test_helpers import create_test_user
 
 # Create in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"

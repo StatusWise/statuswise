@@ -92,7 +92,7 @@ def create_user_from_google(google_user_info: dict, db: Session) -> models.User:
     """Create a new user from Google OAuth data"""
     # Check if this should be an admin user
     is_admin = is_admin_email(google_user_info["email"])
-    
+
     db_user = models.User(
         email=google_user_info["email"],
         name=google_user_info["name"],
@@ -105,10 +105,10 @@ def create_user_from_google(google_user_info: dict, db: Session) -> models.User:
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    
+
     if is_admin:
         print(f"✅ Created admin user: {google_user_info['email']}")
-    
+
     return db_user
 
 
@@ -125,12 +125,12 @@ def get_or_create_user_from_google(google_user_info: dict, db: Session) -> model
         # Update user info in case it changed
         user.name = google_user_info["name"]
         user.avatar_url = google_user_info["avatar_url"]
-        
+
         # Check if this should be an admin user (in case ADMIN_EMAIL was added later)
         if is_admin_email(str(user.email)) and not bool(user.is_admin):  # type: ignore
             user.is_admin = True  # type: ignore
             print(f"✅ Granted admin privileges to: {user.email}")
-            
+
         db.commit()
         return user
 
@@ -146,12 +146,12 @@ def get_or_create_user_from_google(google_user_info: dict, db: Session) -> model
         user.google_id = google_user_info["google_id"]
         user.name = google_user_info["name"]
         user.avatar_url = google_user_info["avatar_url"]
-        
+
         # Check if this should be an admin user
         if is_admin_email(str(user.email)) and not bool(user.is_admin):  # type: ignore
             user.is_admin = True  # type: ignore
             print(f"✅ Granted admin privileges to: {user.email}")
-            
+
         db.commit()
         return user
 

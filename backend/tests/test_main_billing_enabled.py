@@ -14,12 +14,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from test_helpers import create_test_user
 
+from auth import create_access_token
 from database import Base, override_engine
 from main import app, get_db
 from models import User
-from test_helpers import create_test_user
-from auth import create_access_token
 
 # Create in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -70,24 +70,26 @@ class TestBillingEnabledEndpoints:
     def test_subscription_status_with_user(self):
         """Test subscription status with authenticated user."""
         db = TestingSessionLocal()
-        
+
         # Create user
         user = create_test_user(email="test@example.com")
         db.add(user)
         db.commit()
         db.refresh(user)
-        
+
         # Create token
         token = create_access_token({"sub": user.email})
-        
+
         # Test subscription status
-        response = client.get("/subscription/status", headers={"Authorization": f"Bearer {token}"})
+        response = client.get(
+            "/subscription/status", headers={"Authorization": f"Bearer {token}"}
+        )
         assert response.status_code == 200
-        
+
         data = response.json()
         assert "tier" in data
         assert "status" in data
-        
+
         db.close()
 
     def test_checkout_requires_auth(self):

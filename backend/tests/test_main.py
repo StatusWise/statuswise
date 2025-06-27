@@ -9,11 +9,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from test_helpers import create_test_user
 
 from database import Base, override_engine
 from main import app, get_db
 from models import Incident, Project, SubscriptionStatus, SubscriptionTier, User
-from test_helpers import create_test_user
 
 # Create in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -92,6 +92,7 @@ def test_user():
 def auth_headers(test_user):
     # Since we're using Google OAuth now, we need to create a JWT token directly
     from auth import create_access_token
+
     token = create_access_token({"sub": test_user.email})
     return {"Authorization": f"Bearer {token}"}
 

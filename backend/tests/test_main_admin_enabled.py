@@ -9,12 +9,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from test_helpers import create_test_user
 
+from auth import create_access_token
 from database import Base, override_engine
 from main import app, get_db
-from models import User, SubscriptionTier, SubscriptionStatus
-from test_helpers import create_test_user
-from auth import create_access_token
+from models import SubscriptionStatus, SubscriptionTier, User
 
 # Create in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"

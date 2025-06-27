@@ -3,7 +3,8 @@ Test helper functions for creating Google OAuth users and other test utilities.
 """
 
 from typing import Optional
-from models import User, SubscriptionTier, SubscriptionStatus
+
+from models import SubscriptionStatus, SubscriptionTier, User
 
 
 def create_test_user(
@@ -40,4 +41,4 @@ def create_test_admin(
         name=name,
         google_id=google_id,
         is_admin=True,
-    ) 
+    )

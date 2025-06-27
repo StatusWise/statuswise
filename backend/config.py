@@ -84,7 +84,9 @@ class Config:
 
         # Admin user guidance
         if not cls.ADMIN_EMAIL:
-            print("💡 Tip: Set ADMIN_EMAIL to automatically grant admin privileges to a user")
+            print(
+                "💡 Tip: Set ADMIN_EMAIL to automatically grant admin privileges to a user"
+            )
 
         if cls.ENABLE_BILLING:
             billing_errors = []
