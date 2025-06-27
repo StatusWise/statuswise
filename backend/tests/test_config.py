@@ -5,7 +5,6 @@ from unittest.mock import patch
 os.environ["TESTING"] = "1"
 
 
-
 class TestConfig:
     """Test the configuration module and feature toggles."""
 

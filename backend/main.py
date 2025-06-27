@@ -161,9 +161,7 @@ def get_db():
 
 
 @app.post("/auth/google", response_model=schemas.AuthResponse, tags=["authentication"])
-def google_auth(
-    auth_request: schemas.GoogleAuthRequest, db: Session = Depends(get_db)
-):
+def google_auth(auth_request: schemas.GoogleAuthRequest, db: Session = Depends(get_db)):
     """
     Authenticate user with Google OAuth token.
 
@@ -182,7 +180,7 @@ def google_auth(
             detail="Invalid Google token",
         )
 
-    if not google_user_info.get('email_verified', False):
+    if not google_user_info.get("email_verified", False):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Google email not verified",
@@ -205,12 +203,8 @@ def google_auth(
 
         # Create JWT token
         token = auth.create_access_token({"sub": user.email})
-        
-        return {
-            "access_token": token,
-            "token_type": "bearer",
-            "user": user
-        }
+
+        return {"access_token": token, "token_type": "bearer", "user": user}
     except Exception as e:
         db.rollback()
         print(f"Authentication error: {str(e)}")

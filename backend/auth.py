@@ -26,17 +26,17 @@ def verify_google_token(token: str) -> Optional[dict]:
         idinfo = id_token.verify_oauth2_token(
             token, requests.Request(), GOOGLE_CLIENT_ID
         )
-        
+
         # Check if the token is for our app
-        if idinfo.get('aud') != GOOGLE_CLIENT_ID:
+        if idinfo.get("aud") != GOOGLE_CLIENT_ID:
             return None
-            
+
         return {
-            'google_id': idinfo.get('sub'),
-            'email': idinfo.get('email'),
-            'name': idinfo.get('name'),
-            'avatar_url': idinfo.get('picture'),
-            'email_verified': idinfo.get('email_verified', False)
+            "google_id": idinfo.get("sub"),
+            "email": idinfo.get("email"),
+            "name": idinfo.get("name"),
+            "avatar_url": idinfo.get("picture"),
+            "email_verified": idinfo.get("email_verified", False),
         }
     except ValueError:
         # Invalid token
@@ -75,7 +75,7 @@ def get_current_user(
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    
+
     user = db.query(models.User).filter(models.User.email == email).first()
     if user is None:
         raise credentials_exception
@@ -85,13 +85,13 @@ def get_current_user(
 def create_user_from_google(google_user_info: dict, db: Session) -> models.User:
     """Create a new user from Google OAuth data"""
     db_user = models.User(
-        email=google_user_info['email'],
-        name=google_user_info['name'],
-        google_id=google_user_info['google_id'],
-        avatar_url=google_user_info['avatar_url'],
-        is_active=True
+        email=google_user_info["email"],
+        name=google_user_info["name"],
+        google_id=google_user_info["google_id"],
+        avatar_url=google_user_info["avatar_url"],
+        is_active=True,
     )
-    
+
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -101,25 +101,33 @@ def create_user_from_google(google_user_info: dict, db: Session) -> models.User:
 def get_or_create_user_from_google(google_user_info: dict, db: Session) -> models.User:
     """Get existing user or create new one from Google OAuth data"""
     # First try to find by Google ID
-    user = db.query(models.User).filter(models.User.google_id == google_user_info['google_id']).first()
-    
+    user = (
+        db.query(models.User)
+        .filter(models.User.google_id == google_user_info["google_id"])
+        .first()
+    )
+
     if user:
         # Update user info in case it changed
-        user.name = google_user_info['name']
-        user.avatar_url = google_user_info['avatar_url']
+        user.name = google_user_info["name"]
+        user.avatar_url = google_user_info["avatar_url"]
         db.commit()
         return user
-    
+
     # If not found by Google ID, try by email
-    user = db.query(models.User).filter(models.User.email == google_user_info['email']).first()
-    
+    user = (
+        db.query(models.User)
+        .filter(models.User.email == google_user_info["email"])
+        .first()
+    )
+
     if user:
         # Update existing user with Google info
-        user.google_id = google_user_info['google_id']
-        user.name = google_user_info['name']
-        user.avatar_url = google_user_info['avatar_url']
+        user.google_id = google_user_info["google_id"]
+        user.name = google_user_info["name"]
+        user.avatar_url = google_user_info["avatar_url"]
         db.commit()
         return user
-    
+
     # Create new user
     return create_user_from_google(google_user_info, db)

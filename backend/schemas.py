@@ -24,6 +24,7 @@ class SubscriptionStatus(str, Enum):
 
 class GoogleAuthRequest(BaseModel):
     """Request schema for Google OAuth authentication"""
+
     google_token: str = Field(..., description="Google OAuth ID token")
 
 
@@ -41,6 +42,7 @@ class UserOut(BaseModel):
 
 class AuthResponse(BaseModel):
     """Response schema for authentication endpoints"""
+
     access_token: str
     token_type: str = "bearer"
     user: UserOut
