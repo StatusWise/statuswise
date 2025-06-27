@@ -189,15 +189,15 @@ The updated workflows use Makefile commands:
 ### Deployment Checks
 
 ```bash
-# Run all deployment checks
+# Run all deployment checks (lint + test)
 make deploy-check
 ```
 
 This verifies:
 - All tests pass
 - Code quality standards met
-- Security scans clean
-- Production build works
+
+Note: Security scans and production builds are now automatically included in the main CI/CD pipeline (`ci.yml`) for every push/PR.
 
 ## Database Management
 
@@ -268,7 +268,7 @@ cd backend && python -m pytest tests/test_auth.py --cov=auth --cov-report=term-m
 ## Production Deployment
 
 ```bash
-# Pre-deployment check
+# Pre-deployment check (runs lint + test)
 make deploy-check
 
 # Build for production
