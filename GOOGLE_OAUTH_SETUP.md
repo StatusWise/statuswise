@@ -56,6 +56,7 @@ StatusWise uses Google OAuth for secure, password-free authentication. This guid
 
 5. **Test Users** (if External)
    - Add email addresses of users who can test your app
+   - **Important**: Include your admin email address here
    - Click "Save and Continue"
 
 ### 4. Create OAuth Credentials
@@ -107,6 +108,9 @@ Edit `backend/.env`:
 GOOGLE_CLIENT_ID=your-client-id-from-google-console
 GOOGLE_CLIENT_SECRET=your-client-secret-from-google-console
 
+# Admin user (automatically becomes admin on first login)
+ADMIN_EMAIL=your-admin-email@example.com
+
 # Database
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/statuswise
 
@@ -130,18 +134,13 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-client-id-from-google-console
 
 **⚠️ Important**: The `NEXT_PUBLIC_GOOGLE_CLIENT_ID` should be the same as the `GOOGLE_CLIENT_ID` in your backend configuration.
 
-## 🔄 Migration (If Upgrading)
+### 3. Admin User Setup
 
-If you're upgrading from password-based authentication:
+**Important**: Set your `ADMIN_EMAIL` to the email address you want to use as the admin:
 
-```bash
-# Run the migration script
-make migrate-google-oauth
-
-# Or manually:
-cd backend
-python google_oauth_migration.py
-```
+- This email address will automatically receive admin privileges when they first sign in
+- Make sure this email is added to the "Test Users" list in your OAuth consent screen
+- The user with this email can then access the admin dashboard to manage other users
 
 ## 🚀 Testing Your Setup
 
@@ -156,10 +155,15 @@ python google_oauth_migration.py
    - Open [http://localhost:3000](http://localhost:3000)
    - You should see a "Sign in with Google" button
 
-3. **Test Authentication**
+3. **Test Admin Authentication**
    - Click "Sign in with Google"
-   - Complete the Google OAuth flow
+   - Sign in with the Google account matching your `ADMIN_EMAIL`
    - You should be redirected to the dashboard
+   - You should see admin-specific options and can access `/admin`
+
+4. **Test Regular User Authentication**
+   - Sign out and sign in with a different Google account
+   - This user should have regular (non-admin) access
 
 ## 🔧 Troubleshooting
 
@@ -172,6 +176,7 @@ python google_oauth_migration.py
 **"Error 403: access_blocked"**
 - Your OAuth consent screen might need verification for external users
 - Add test users in the OAuth consent screen for testing
+- Make sure your admin email is in the test users list
 
 **"Invalid Google token"**
 - Check that your `GOOGLE_CLIENT_ID` is correctly set in both backend and frontend
@@ -181,16 +186,23 @@ python google_oauth_migration.py
 - Verify your backend is running on the correct port (8000)
 - Check that `NEXT_PUBLIC_API_URL` points to the correct backend URL
 
+**Admin privileges not working**
+- Check that `ENABLE_ADMIN=true` in your backend environment
+- Verify that `ADMIN_EMAIL` matches exactly with your Google account email
+- Check the backend logs for admin privilege grant messages
+
 ### Development vs Production
 
 **Development Setup:**
 - Use `http://localhost:3000` for origins and redirects
 - You can use "External" user type for testing
+- Add all test user emails to the OAuth consent screen
 
 **Production Setup:**
 - Use your actual domain (e.g., `https://status.yourdomain.com`)
 - Consider using "Internal" if you have Google Workspace
 - Ensure HTTPS is enabled for production
+- Update `ADMIN_EMAIL` to your production admin email
 
 ## 📚 Additional Resources
 
@@ -206,6 +218,7 @@ If you encounter issues:
 2. Verify your environment variables are correctly set
 3. Ensure your Google Cloud Console configuration matches your StatusWise setup
 4. Review the StatusWise logs for authentication errors
+5. Check that your admin email is properly configured
 
 For additional support, please open an issue on the StatusWise GitHub repository with:
 - Your error message

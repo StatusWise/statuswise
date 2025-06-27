@@ -24,6 +24,9 @@ class Config:
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
+    # Default admin user (first user with this email becomes admin)
+    ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "")
+
     # Feature toggles
     ENABLE_BILLING: bool = os.getenv("ENABLE_BILLING", "false").lower() in (
         "true",
@@ -78,6 +81,10 @@ class Config:
         # Google OAuth validation
         if not cls.GOOGLE_CLIENT_ID:
             errors["google_oauth"] = "GOOGLE_CLIENT_ID is required for authentication"
+
+        # Admin user guidance
+        if not cls.ADMIN_EMAIL:
+            print("💡 Tip: Set ADMIN_EMAIL to automatically grant admin privileges to a user")
 
         if cls.ENABLE_BILLING:
             billing_errors = []
