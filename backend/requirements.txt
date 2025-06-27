@@ -9,6 +9,8 @@ python-multipart==0.0.20
 requests==2.32.4
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.5.0
+google-auth==2.34.0
+google-auth-oauthlib==1.2.1
 bleach==6.2.0
 pytest==8.4.1
 pytest-asyncio==1.0.0

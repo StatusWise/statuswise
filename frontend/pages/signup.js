@@ -1,133 +1,38 @@
-import React, { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import axios from 'axios'
+import React, { useEffect } from 'react'
 import { useRouter } from 'next/router'
-
-// Zod schema for signup validation
-const signupSchema = z.object({
-  email: z
-    .string()
-    .min(1, 'Email is required')
-    .email('Please enter a valid email address')
-    .transform(val => val.trim().toLowerCase()),
-  password: z
-    .string()
-    .min(1, 'Password is required')
-    .min(6, 'Password must be at least 6 characters long')
-})
+import Head from 'next/head'
 
 export default function Signup() {
-  const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-    setError: setFieldError
-  } = useForm({
-    resolver: zodResolver(signupSchema),
-    mode: 'onBlur' // Validate on blur for better UX
-  })
-
-  const onSubmit = async (data) => {
-    setError('')
-    setIsLoading(true)
-    
-    try {
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/signup`, data)
-      alert("Signup successful. Please login.")
-      router.push('/login')
-    } catch (err) {
-      if (err.response?.status === 422) {
-        const detail = err.response.data?.detail
-        if (Array.isArray(detail)) {
-          // Handle validation errors from backend
-          detail.forEach(error => {
-            const field = error.loc?.[error.loc.length - 1]
-            if (field && ['email', 'password'].includes(field)) {
-              setFieldError(field, { message: error.msg })
-            }
-          })
-        } else {
-          setError("Invalid input. Please check your email and password.")
-        }
-      } else if (err.response?.status === 400) {
-        setError("User with this email already exists. Please try logging in instead.")
-      } else if (err.response?.status >= 500) {
-        setError("Server error. Please try again later.")
-      } else if (err.code === 'NETWORK_ERROR') {
-        setError("Network error. Please check your connection and try again.")
-      } else {
-        setError("Signup failed. Please try again.")
-      }
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const isFormDisabled = isLoading || isSubmitting
+  useEffect(() => {
+    // Redirect to login since we're using Google OAuth
+    router.push('/login')
+  }, [router])
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="bg-white p-10 rounded shadow-md w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center">Signup</h2>
-        
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
+    <>
+      <Head>
+        <title>Sign Up - StatusWise</title>
+      </Head>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <div className="text-center">
+            <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
+              Redirecting to Sign In
+            </h2>
+            <p className="mt-2 text-sm text-gray-600">
+              StatusWise now uses Google OAuth for authentication
+            </p>
+            <div className="mt-4">
+              <svg className="animate-spin h-6 w-6 text-blue-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
           </div>
-        )}
-        
-        <form onSubmit={handleSubmit(onSubmit)} noValidate>
-          <div className="mb-4">
-            <input 
-              type="email" 
-              placeholder="Email" 
-              className={`border p-2 w-full ${errors.email ? 'border-red-500' : 'border-gray-300'}`}
-              disabled={isFormDisabled}
-              {...register('email')}
-            />
-            {errors.email && (
-              <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
-            )}
-          </div>
-          
-          <div className="mb-4">
-            <input 
-              type="password" 
-              placeholder="Password (min 6 characters)" 
-              className={`border p-2 w-full ${errors.password ? 'border-red-500' : 'border-gray-300'}`}
-              disabled={isFormDisabled}
-              {...register('password')}
-            />
-            {errors.password && (
-              <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>
-            )}
-          </div>
-          
-          <button 
-            type="submit"
-            className={`w-full py-2 rounded text-white ${isFormDisabled ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`} 
-            disabled={isFormDisabled}
-          >
-            {isFormDisabled ? 'Creating Account...' : 'Create Account'}
-          </button>
-        </form>
-        
-        <div className="text-center mt-4">
-          <button 
-            className="text-blue-500 hover:text-blue-700"
-            onClick={() => router.push('/login')}
-            disabled={isFormDisabled}
-          >
-            Already have an account? Login
-          </button>
         </div>
       </div>
-    </div>
+    </>
   )
 } 

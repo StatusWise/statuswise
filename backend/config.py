@@ -20,6 +20,10 @@ class Config:
     # Frontend configuration
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+    # Google OAuth configuration
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+
     # Feature toggles
     ENABLE_BILLING: bool = os.getenv("ENABLE_BILLING", "false").lower() in (
         "true",
@@ -70,6 +74,10 @@ class Config:
     def validate_configuration(cls) -> Dict[str, str]:
         """Validate configuration and return any errors."""
         errors = {}
+
+        # Google OAuth validation
+        if not cls.GOOGLE_CLIENT_ID:
+            errors["google_oauth"] = "GOOGLE_CLIENT_ID is required for authentication"
 
         if cls.ENABLE_BILLING:
             billing_errors = []

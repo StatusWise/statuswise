@@ -22,21 +22,16 @@ class SubscriptionStatus(str, Enum):
     EXPIRED = "expired"
 
 
-class UserCreate(BaseModel):
-    email: str = Field(..., max_length=320)
-    password: str
-
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, v):
-        if not re.match(r"[^@]+@[^@]+\.[^@]+", v):
-            raise ValueError("Invalid email format")
-        return v
+class GoogleAuthRequest(BaseModel):
+    """Request schema for Google OAuth authentication"""
+    google_token: str = Field(..., description="Google OAuth ID token")
 
 
 class UserOut(BaseModel):
     id: int
     email: str
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
     subscription_tier: SubscriptionTier
     subscription_status: Optional[SubscriptionStatus]
     subscription_expires_at: Optional[datetime.datetime]
@@ -44,9 +39,19 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AuthResponse(BaseModel):
+    """Response schema for authentication endpoints"""
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
 class AdminUserOut(BaseModel):
     id: int
     email: str
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    google_id: Optional[str] = None
     is_active: bool
     is_admin: bool
     subscription_tier: SubscriptionTier

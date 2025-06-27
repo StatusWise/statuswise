@@ -10,6 +10,7 @@ StatusWise provides a powerful, self-hostable alternative to services like Statu
 
 *   🚀 **Fast Setup**: Deploy a beautiful, responsive status page in minutes using Docker.
 *   🔒 **Privacy-First**: Self-host to keep full ownership and control of your incident and subscriber data.
+*   🔐 **Google OAuth**: Secure authentication using Google OAuth - no passwords to manage.
 *   🎨 **Custom Branding**: Customize the logo, colors, and layout to match your brand identity.
 *   🧩 **Integrations**: Notify your users via Slack, Email, and Webhooks.
 *   🌐 **Multi-language Support**: Communicate with your audience in their native language.
@@ -32,7 +33,7 @@ StatusWise is built with a modern, robust, and scalable technology stack.
 
 *   **Backend**: **Python 3.11+** with **FastAPI** for high-performance API services.
     *   Database ORM: **SQLAlchemy**
-    *   Authentication: **python-jose** for JWT tokens
+    *   Authentication: **Google OAuth 2.0** with **python-jose** for JWT tokens
 *   **Frontend**: **Next.js 15+** (React) for a fast, modern user interface.
     *   Styling: **Tailwind CSS** for utility-first CSS
     *   Testing: **Jest** and **React Testing Library**
@@ -52,23 +53,73 @@ git clone https://github.com/StatusWise/statuswise.git
 cd statuswise
 ```
 
-**2. Set up environment variables:**
+**2. Set up Google OAuth:**
 
-Copy the example environment files. These contain the default configurations to get you started.
+Before running StatusWise, you need to set up Google OAuth:
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the **Google+ API** or **Google Identity** API
+4. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client IDs**
+5. Configure the OAuth consent screen
+6. Set **Authorized JavaScript origins**: `http://localhost:3000` (for development)
+7. Set **Authorized redirect URIs**: `http://localhost:3000` (for development)
+8. Copy your **Client ID** and **Client Secret**
+
+**3. Set up environment variables:**
+
+Copy the example environment files and configure them with your Google OAuth credentials:
+
 ```bash
 cp backend/env.example backend/.env
 cp frontend/env.example frontend/.env
 ```
-*You can customize the `.env` files later as needed.*
 
-**3. Build and run with Docker Compose:**
+**Edit `backend/.env`:**
+```bash
+# Required: Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id-here
+GOOGLE_CLIENT_SECRET=your-google-client-secret-here
+
+# Database
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/statuswise
+
+# Security
+SECRET_KEY=your-secret-key-here
+JWT_SECRET=your-jwt-secret-here
+
+# Feature toggles
+ENABLE_BILLING=false
+ENABLE_ADMIN=false
+```
+
+**Edit `frontend/.env`:**
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id-here
+```
+
+**4. Run database migration (if you have existing data):**
+
+If you're migrating from password-based authentication:
+```bash
+cd backend
+python google_oauth_migration.py
+```
+
+**5. Build and run with Docker Compose:**
 ```bash
 docker compose up --build -d
 ```
 
-**4. Access your instance:**
-*   **Admin UI**: [http://localhost:3000](http://localhost:3000)
+**6. Access your instance:**
+*   **Frontend**: [http://localhost:3000](http://localhost:3000)
 *   **API**: [http://localhost:8000/docs](http://localhost:8000/docs) (Interactive API documentation)
+
+**First Login:**
+- Click "Sign in with Google" 
+- Use any Google account - the first user becomes an admin automatically
+- Access the admin dashboard to manage users and system settings
 
 ---
 

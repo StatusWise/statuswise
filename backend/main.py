@@ -160,78 +160,64 @@ def get_db():
         db.close()
 
 
-@app.post("/signup", response_model=schemas.UserOut, tags=["authentication"])
-def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    """
-    Register a new user account.
-
-    Creates a new user with the provided email and password.
-    Optionally creates a Lemon Squeezy customer record for billing.
-
-    - **email**: Must be a valid email address
-    - **password**: User's password (will be hashed before storage)
-
-    Returns the created user information including subscription details.
-    """
-    # Check if user already exists
-    existing_user = (
-        db.query(models.User).filter(models.User.email == user.email).first()
-    )
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email already exists",
-        )
-
-    hashed_password = auth.get_password_hash(user.password)
-    db_user = models.User(email=user.email, hashed_password=hashed_password)
-
-    try:
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-
-        # Create Lemon Squeezy customer for new user (optional)
-        try:
-            customer_id = LemonSqueezyService.create_customer(user.email)
-            if customer_id:
-                db_user.lemonsqueezy_customer_id = customer_id
-                db.commit()
-        except Exception as e:
-            print(f"Failed to create Lemon Squeezy customer: {str(e)}")
-            # Don't fail signup if customer creation fails
-
-        return db_user
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User with this email already exists",
-        )
-
-
-@app.post("/login", tags=["authentication"])
-def login(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+@app.post("/auth/google", response_model=schemas.AuthResponse, tags=["authentication"])
+def google_auth(
+    auth_request: schemas.GoogleAuthRequest, db: Session = Depends(get_db)
 ):
     """
-    Authenticate user and return access token.
+    Authenticate user with Google OAuth token.
 
-    Use this endpoint to authenticate with email and password.
-    Returns a Bearer token that should be included in subsequent requests.
+    Verifies the Google OAuth ID token and creates/updates the user account.
+    Returns a JWT access token for subsequent API requests.
 
-    - **username**: User's email address
-    - **password**: User's password
+    - **google_token**: Google OAuth ID token from the frontend
 
-    Returns an access token and token type.
+    Returns an access token, token type, and user information.
     """
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
-    if not user or not auth.verify_password(form_data.password, user.hashed_password):
+    # Verify Google token
+    google_user_info = auth.verify_google_token(auth_request.google_token)
+    if not google_user_info:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google token",
         )
-    token = auth.create_access_token({"sub": user.email})
-    return {"access_token": token, "token_type": "bearer"}
+
+    if not google_user_info.get('email_verified', False):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google email not verified",
+        )
+
+    try:
+        # Get or create user from Google OAuth data
+        user = auth.get_or_create_user_from_google(google_user_info, db)
+
+        # Create Lemon Squeezy customer for new user (optional)
+        if not user.lemonsqueezy_customer_id:
+            try:
+                customer_id = LemonSqueezyService.create_customer(user.email)
+                if customer_id:
+                    user.lemonsqueezy_customer_id = customer_id
+                    db.commit()
+            except Exception as e:
+                print(f"Failed to create Lemon Squeezy customer: {str(e)}")
+                # Don't fail authentication if customer creation fails
+
+        # Create JWT token
+        token = auth.create_access_token({"sub": user.email})
+        
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": user
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Authentication error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication failed",
+        )
 
 
 @app.get("/", tags=["health"])

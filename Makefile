@@ -188,6 +188,11 @@ db-reset: ## Reset the database (for development)
 	cd backend && python -c "from database import engine; from models import Base; Base.metadata.drop_all(bind=engine); Base.metadata.create_all(bind=engine)"
 	@echo "✅ Database reset complete!"
 
+migrate-google-oauth: ## Migrate from password auth to Google OAuth
+	@echo "🔄 Migrating to Google OAuth authentication..."
+	cd backend && python google_oauth_migration.py
+	@echo "✅ Google OAuth migration complete!"
+
 # Docker commands
 docker-build: ## Build Docker images
 	docker-compose build
