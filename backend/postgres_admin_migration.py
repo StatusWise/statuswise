@@ -9,7 +9,7 @@ import os
 import sys
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import IntegrityError, ProgrammingError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 # Add the current directory to the path

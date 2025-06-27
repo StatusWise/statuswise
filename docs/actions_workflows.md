@@ -87,7 +87,7 @@ On every push to `main`/`develop` branches and every commit to PRs targeting the
 - `pull_request` when labeled with `run-compat-tests`
 
 **🏗️ Jobs**:
-- **`compatibility-matrix`**: Combined Python (3.9-3.11) + Node.js (18,20) testing
+- **`compatibility-matrix`**: Combined Python (3.11+) + Node.js (18,20) testing
 - **`database-compatibility`**: PostgreSQL versions (13-16) testing
 - **`integration-tests`**: Docker Compose + performance testing
 - **`compatibility-summary`**: Results aggregation

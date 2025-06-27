@@ -28,9 +28,15 @@ test: test-backend test-frontend ## Run all tests with proper isolation
 
 test-backend: ## Run backend tests with proper isolation (file by file)
 	@echo "🧪 Running backend tests with proper isolation..."
+	@cd backend && echo "Testing admin auth endpoints..." && python -m pytest tests/test_admin_authorization.py -v --tb=short
+	@cd backend && echo "Testing admin endpoints..." && python -m pytest tests/test_admin.py -v --tb=short
 	@cd backend && echo "Testing auth module..." && python -m pytest tests/test_auth.py -v --tb=short
+	@cd backend && echo "Testing config module..." && python -m pytest tests/test_config.py -v --tb=short
+	@cd backend && echo "Testing feature toggles..." && python -m pytest tests/test_feature_toggles.py -v --tb=short
 	@cd backend && echo "Testing LemonSqueezy service..." && python -m pytest tests/test_lemonsqueezy_service.py -v --tb=short
 	@cd backend && echo "Testing main additional (authorization)..." && python -m pytest tests/test_main_additional.py -v --tb=short
+	@cd backend && echo "Testing main admin enabled..." && python -m pytest tests/test_main_admin_enabled.py -v --tb=short
+	@cd backend && echo "Testing main billing enabled..." && python -m pytest tests/test_main_billing_enabled.py -v --tb=short
 	@cd backend && echo "Testing main endpoints..." && python -m pytest tests/test_main.py -v --tb=short
 	@echo "✅ All backend tests completed!"
 
@@ -39,9 +45,15 @@ test-backend-fast: ## Run backend tests in parallel (may have isolation issues)
 
 test-backend-coverage: ## Run backend tests with coverage report
 	@echo "🧪 Running backend tests with coverage..."
+	@cd backend && python -m pytest tests/test_admin_authorization.py --cov=admin_authorization --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_admin.py --cov=admin --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_auth.py --cov=auth --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_config.py --cov=config --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_feature_toggles.py --cov=feature_toggles --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_lemonsqueezy_service.py --cov=lemonsqueezy_service --cov-append --tb=short
-	@cd backend && python -m pytest tests/test_main_additional.py --cov=. --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_main_admin_enabled.py --cov=main_admin_enabled --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_main_billing_enabled.py --cov=main_billing_enabled --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_main_additional.py --cov=main_additional --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_main.py --cov=main --cov-append --tb=short --cov-report=html --cov-report=term-missing
 	@echo "✅ Coverage report generated in backend/htmlcov/"
 
@@ -240,11 +252,16 @@ clean: ## Clean up generated files
 # CI/CD helpers
 ci-test-backend: ## CI backend test command (with proper isolation)
 	@echo "🤖 Running backend tests for CI..."
-	cd backend && python -m pytest tests/test_auth.py -v --tb=short --junitxml=test-results-auth.xml
-	cd backend && python -m pytest tests/test_lemonsqueezy_service.py -v --tb=short --junitxml=test-results-lemonsqueezy.xml
-	cd backend && python -m pytest tests/test_main_additional.py -v --tb=short --junitxml=test-results-main-additional.xml
-	cd backend && python -m pytest tests/test_main.py -v --tb=short --junitxml=test-results-main.xml
-	cd backend && python -m pytest --cov=. --cov-report=xml --cov-report=term-missing tests/test_main_additional.py
+	@cd backend && python -m pytest tests/test_admin_authorization.py -v --tb=short --junitxml=test-results-admin-authorization.xml
+	@cd backend && python -m pytest tests/test_admin.py -v --tb=short --junitxml=test-results-admin.xml
+	@cd backend && python -m pytest tests/test_auth.py -v --tb=short --junitxml=test-results-auth.xml
+	@cd backend && python -m pytest tests/test_config.py -v --tb=short --junitxml=test-results-config.xml
+	@cd backend && python -m pytest tests/test_feature_toggles.py -v --tb=short --junitxml=test-results-feature-toggles.xml
+	@cd backend && python -m pytest tests/test_lemonsqueezy_service.py -v --tb=short --junitxml=test-results-lemonsqueezy.xml
+	@cd backend && python -m pytest tests/test_main_additional.py -v --tb=short --junitxml=test-results-main-additional.xml
+	@cd backend && python -m pytest tests/test_main_admin_enabled.py -v --tb=short --junitxml=test-results-main-admin-enabled.xml
+	@cd backend && python -m pytest tests/test_main_billing_enabled.py -v --tb=short --junitxml=test-results-main-billing-enabled.xml
+	@cd backend && python -m pytest tests/test_main.py -v --tb=short --junitxml=test-results-main.xml
 
 ci-test-frontend: ## CI frontend test command
 	cd frontend && npm run test:coverage

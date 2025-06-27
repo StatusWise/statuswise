@@ -14,8 +14,8 @@ pytest==8.4.1
 pytest-asyncio==1.0.0
 httpx==0.28.1
 pytest-cov==6.2.1
-black==24.3.0
-isort==5.13.2 
+black==25.1.0
+isort==6.0.1 
 casbin==1.43.0
 flake8==7.0.0
 bandit==1.7.5

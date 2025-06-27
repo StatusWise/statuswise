@@ -1,7 +1,8 @@
 import os
 
-# Set testing environment variable before importing main
+# Set testing environment variables before importing main
 os.environ["TESTING"] = "1"
+os.environ["ENABLE_ADMIN"] = "true"  # Enable admin functionality for admin tests
 
 import pytest
 from fastapi import HTTPException

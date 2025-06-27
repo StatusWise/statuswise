@@ -1,8 +1,12 @@
 import datetime
 import os
 
-# Set testing environment variable before importing main
+# Set testing environment variables before importing main
 os.environ["TESTING"] = "1"
+os.environ["ENABLE_ADMIN"] = "true"  # Enable admin functionality for admin tests
+os.environ["ENABLE_BILLING"] = (
+    "true"  # Enable billing for subscription-related admin features
+)
 
 import pytest
 from fastapi.testclient import TestClient
@@ -361,9 +365,7 @@ class TestAdminUsers:
             headers=admin_auth_headers,
         )
         assert response.status_code == 400
-        assert (
-            "Cannot remove admin privileges from yourself" in response.json()["detail"]
-        )
+        assert "Cannot remove your own admin privileges" in response.json()["detail"]
 
 
 class TestAdminSubscriptions:

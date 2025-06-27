@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useContext } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -6,6 +6,7 @@ import axios from 'axios'
 import { useRouter } from 'next/router'
 import moment from 'moment'
 import logger from '../utils/logger'
+import { ConfigContext } from './_app'
 
 // Zod schemas for validation
 const projectSchema = z.object({
@@ -36,6 +37,8 @@ const incidentSchema = z.object({
 
 export default function Dashboard() {
   const router = useRouter()
+  const { isBillingEnabled, isAdminEnabled, isFeatureEnabled } = useContext(ConfigContext)
+  
   const [projects, setProjects] = useState([])
   const [selectedProject, setSelectedProject] = useState(null)
   const [incidents, setIncidents] = useState([])
@@ -58,6 +61,22 @@ export default function Dashboard() {
   })
 
   const fetchSubscriptionStatus = useCallback(async () => {
+    // Only fetch subscription status if billing is enabled
+    if (!isBillingEnabled()) {
+      setSubscription({
+        tier: 'pro',  // Use "pro" as unlimited tier when billing disabled
+        status: 'active',
+        expires_at: null,
+        limits: {
+          max_projects: 999999,
+          max_incidents_per_project: 999999,
+          features: ['all_features_enabled']
+        },
+        usage: { projects: projects.length, max_projects: 999999 }
+      })
+      return
+    }
+    
     try {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/subscription/status`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -67,9 +86,15 @@ export default function Dashboard() {
       logger.error('Error fetching subscription:', error)
       // Don't set error for subscription fetch failures
     }
-  }, [token])
+  }, [token, isBillingEnabled, projects.length])
 
   const fetchCurrentUser = useCallback(async () => {
+    // Only check admin status if admin functionality is enabled
+    if (!isAdminEnabled()) {
+      setCurrentUser({ is_admin: false })
+      return
+    }
+    
     try {
       // We need to create a /me endpoint or get user info from token
       // For now, we'll check admin status by trying to access admin stats
@@ -82,7 +107,7 @@ export default function Dashboard() {
       // If failed, user is not admin
       setCurrentUser({ is_admin: false })
     }
-  }, [token])
+  }, [token, isAdminEnabled])
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -221,7 +246,8 @@ export default function Dashboard() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <div className="flex items-center space-x-4">
-          {subscription && (
+          {/* Only show subscription status and upgrade button if billing is enabled */}
+          {isBillingEnabled() && subscription && (
             <div className="flex items-center space-x-2">
               <span className={`px-2 py-1 rounded text-sm font-medium ${
                 subscription.tier === 'pro' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
@@ -238,7 +264,8 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          {currentUser?.is_admin && (
+          {/* Only show admin dashboard button if admin is enabled and user is admin */}
+          {isAdminEnabled() && currentUser?.is_admin && (
             <button
               onClick={() => router.push('/admin')}
               className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600"
@@ -246,12 +273,15 @@ export default function Dashboard() {
               Admin Dashboard
             </button>
           )}
-          <button
-            onClick={() => router.push('/subscription')}
-            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-          >
-            Subscription
-          </button>
+          {/* Only show subscription button if billing is enabled */}
+          {isBillingEnabled() && (
+            <button
+              onClick={() => router.push('/subscription')}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+              Subscription
+            </button>
+          )}
           <button 
             className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
             onClick={() => {
@@ -270,16 +300,16 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Subscription Status Card */}
-      {subscription && (
+      {/* Subscription Status Card - only show if billing is enabled */}
+      {isBillingEnabled() && subscription && (
         <div className="bg-white p-4 rounded shadow mb-6 border-l-4 border-blue-500">
           <div className="flex justify-between items-center">
             <div>
               <h3 className="font-semibold text-gray-900">
-                {subscription.tier === 'pro' ? 'Pro Plan' : 'Free Plan'}
+                {subscription.tier === 'pro' ? (isBillingEnabled() ? 'Pro Plan' : 'Unlimited Plan') : 'Free Plan'}
               </h3>
               <div className="text-sm text-gray-600 mt-1">
-                Projects: {subscription.usage.projects} / {subscription.limits.max_projects}
+                Projects: {subscription.usage.projects} / {subscription.limits.max_projects === 999999 ? '∞' : subscription.limits.max_projects}
                 {subscription.tier === 'free' && subscription.usage.projects >= subscription.limits.max_projects && (
                   <span className="text-red-600 ml-2">Limit reached!</span>
                 )}
@@ -313,6 +343,16 @@ export default function Dashboard() {
                     {new Date(subscription.expires_at).toLocaleDateString()}
                   </div>
                 )}
+              </div>
+            )}
+                            {subscription.tier === 'pro' && !isBillingEnabled() && (
+              <div className="text-right">
+                <div className="text-sm font-medium text-green-600">
+                  All Features Enabled
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Billing disabled on this instance
+                </div>
               </div>
             )}
           </div>

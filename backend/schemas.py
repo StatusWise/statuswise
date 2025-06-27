@@ -153,3 +153,13 @@ class IncidentOut(IncidentCreate):
     resolved_at: Optional[datetime.datetime]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ConfigResponse(BaseModel):
+    """Configuration response for frontend feature toggles."""
+
+    billing_enabled: bool
+    admin_enabled: bool
+    features: Dict[str, bool]
+
+    model_config = ConfigDict(from_attributes=True)
