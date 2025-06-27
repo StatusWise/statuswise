@@ -66,10 +66,13 @@ export default [
       globals: {
         describe: 'readonly',
         test: 'readonly',
+        it: 'readonly',
         expect: 'readonly',
         jest: 'readonly',
         beforeEach: 'readonly',
         afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
         global: 'readonly',
         process: 'readonly',
         module: 'readonly',

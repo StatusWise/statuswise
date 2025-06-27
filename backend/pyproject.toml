@@ -5,6 +5,28 @@ target-version = ['py311']
 [tool.isort]
 profile = "black"
 
+[tool.flake8]
+max-line-length = 88
+max-complexity = 15
+exclude = [
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    "htmlcov",
+    "*.pyc",
+    ".git",
+    "__init__.py"
+]
+per-file-ignores = [
+    "tests/test_*.py:E402,F401",
+    "postgres_admin_migration.py:C901",
+    "lemonsqueezy_service.py:C901"
+]
+ignore = [
+    "E203",  # whitespace before ':' (conflicts with black)
+    "W503"   # line break before binary operator (conflicts with black)
+]
+
 [tool.bandit]
 exclude_dirs = ["venv", "htmlcov", "__pycache__", ".pytest_cache", "tests"]
 skips = ["B101", "B601"]

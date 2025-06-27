@@ -1,6 +1,5 @@
 import os
 
-
 # Set environment variables for admin-enabled tests BEFORE importing anything
 os.environ["TESTING"] = "1"
 os.environ["ENABLE_ADMIN"] = "true"
