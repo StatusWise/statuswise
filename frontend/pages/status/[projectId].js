@@ -44,7 +44,19 @@ export default function PublicStatus() {
     return (
       <div className="min-h-screen p-10 bg-white">
         <div className="max-w-xl mx-auto bg-white p-6 rounded shadow">
-          <div className="text-red-600 text-center">{error}</div>
+          <div className="text-center">
+            <div className="text-red-600 text-lg font-semibold mb-2">Status Page Not Available</div>
+            <div className="text-gray-600">
+              {error.includes('not found') 
+                ? 'This status page either does not exist or is set to private.' 
+                : error}
+            </div>
+            {error.includes('not found') && (
+              <div className="mt-4 text-sm text-gray-500">
+                Contact the project owner if you believe you should have access to this status page.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     )

@@ -37,6 +37,7 @@ test-backend: ## Run backend tests with proper isolation (file by file)
 	@cd backend && echo "Testing main admin enabled..." && python -m pytest tests/test_main_admin_enabled.py -v --tb=short
 	@cd backend && echo "Testing main billing enabled..." && python -m pytest tests/test_main_billing_enabled.py -v --tb=short
 	@cd backend && echo "Testing main endpoints..." && python -m pytest tests/test_main.py -v --tb=short
+	@cd backend && echo "Testing project privacy features..." && python -m pytest tests/test_project_privacy.py -v --tb=short
 	@echo "✅ All backend tests completed!"
 
 test-backend-fast: ## Run backend tests in parallel (may have isolation issues)
@@ -52,17 +53,37 @@ test-backend-coverage: ## Run backend tests with coverage report
 	@cd backend && python -m pytest tests/test_main_admin_enabled.py --cov=main_admin_enabled --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_main_billing_enabled.py --cov=main_billing_enabled --cov-append --tb=short
 	@cd backend && python -m pytest tests/test_main_additional.py --cov=main_additional --cov-append --tb=short
-	@cd backend && python -m pytest tests/test_main.py --cov=main --cov-append --tb=short --cov-report=html --cov-report=term-missing
+	@cd backend && python -m pytest tests/test_main.py --cov=main --cov-append --tb=short
+	@cd backend && python -m pytest tests/test_project_privacy.py --cov=project_privacy --cov-append --tb=short --cov-report=html --cov-report=term-missing
 	@echo "✅ Coverage report generated in backend/htmlcov/"
 
 test-auth: ## Run only authorization tests (core security)
 	cd backend && python -m pytest tests/test_main_additional.py::TestProjectAccess tests/test_main_additional.py::TestIncidentAccess tests/test_main_additional.py::TestErrorHandling -v
+
+test-privacy: ## Run all privacy toggle tests (backend + frontend)
+	@echo "🔒 Running complete privacy feature tests..."
+	@echo "Backend privacy tests:"
+	@cd backend && python -m pytest tests/test_project_privacy.py -v --tb=short
+	@echo ""
+	@echo "Frontend privacy tests:"
+	@cd frontend && npm test -- privacy-toggle.test.js
+	@echo "✅ All privacy tests completed!"
+
+test-privacy-backend: ## Run only backend privacy tests (fast development testing)
+	@echo "🔒 Running backend privacy feature tests..."
+	cd backend && python -m pytest tests/test_project_privacy.py -v --tb=short
+	@echo "✅ Backend privacy tests completed!"
 
 test-frontend: ## Run frontend tests
 	cd frontend && npm run test:coverage
 
 test-frontend-watch: ## Run frontend tests in watch mode
 	cd frontend && npm test
+
+test-frontend-privacy: ## Run only frontend privacy tests
+	@echo "🎨 Running frontend privacy tests..."
+	cd frontend && npm test -- privacy-toggle.test.js
+	@echo "✅ Frontend privacy tests completed!"
 
 # Linting and formatting
 lint: lint-backend lint-frontend ## Run all linting
@@ -239,7 +260,7 @@ clean: ## Clean up generated files
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
-	rm -rf backend/htmlcov/ 2>/dev/null || true
+	rm -rf htmlcov/ 2>/dev/null || true
 	rm -rf backend/.coverage 2>/dev/null || true
 	rm -rf frontend/coverage/ 2>/dev/null || true
 	rm -rf frontend/.next/ 2>/dev/null || true
@@ -259,13 +280,14 @@ ci-test-backend: ## CI backend test command (with proper isolation)
 	@cd backend && python -m pytest tests/test_main_admin_enabled.py -v --tb=short --junitxml=test-results-main-admin-enabled.xml
 	@cd backend && python -m pytest tests/test_main_billing_enabled.py -v --tb=short --junitxml=test-results-main-billing-enabled.xml
 	@cd backend && python -m pytest tests/test_main.py -v --tb=short --junitxml=test-results-main.xml
+	@cd backend && python -m pytest tests/test_project_privacy.py -v --tb=short --junitxml=test-results-privacy.xml
 
 ci-test-frontend: ## CI frontend test command
 	cd frontend && npm run test:coverage
 
 # Quick commands for common tasks
-quick-test: test-auth ## Quick test of core authorization (fastest)
-	@echo "✅ Quick authorization test complete!"
+quick-test: test-auth test-privacy-backend ## Quick test of core functionality (fastest)
+	@echo "✅ Quick core functionality tests complete!"
 
 full-check: clean install lint test coverage ## Full project check
 	@echo "✅ Full project check complete!"

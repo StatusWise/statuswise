@@ -92,6 +92,7 @@ class AdminProjectOut(BaseModel):
     owner_email: Optional[str] = None
     incidents_count: Optional[int] = None
     unresolved_incidents_count: Optional[int] = None
+    is_public: bool
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -125,6 +126,7 @@ class PortalSessionResponse(BaseModel):
 
 class ProjectCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
+    is_public: bool = False  # Default to private for security
 
     @field_validator("name")
     @classmethod
@@ -138,6 +140,18 @@ class ProjectOut(ProjectCreate):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    is_public: Optional[bool] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_must_not_be_blank(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError("Project name must not be blank or whitespace only")
+        return v
 
 
 class IncidentCreate(BaseModel):

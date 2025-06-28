@@ -90,6 +90,9 @@ class Project(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
     owner_id = Column(Integer, ForeignKey("users.id"))
+    is_public = Column(
+        Boolean, default=False
+    )  # Private by default for security
     owner = relationship("User")
 
 
