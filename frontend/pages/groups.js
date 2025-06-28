@@ -18,7 +18,6 @@ export default function GroupsManagement() {
 
   // Invitations data
   const [invitations, setInvitations] = useState([])
-  const [sentInvitations, setSentInvitations] = useState([])
 
   // Forms
   const [showCreateGroup, setShowCreateGroup] = useState(false)
@@ -172,7 +171,7 @@ export default function GroupsManagement() {
 
   // Remove member
   const handleRemoveMember = async (memberId) => {
-    if (!confirm('Are you sure you want to remove this member?')) return
+    if (!window.confirm('Are you sure you want to remove this member?')) return
     
     setError('')
     setSuccess('')
@@ -360,7 +359,7 @@ export default function GroupsManagement() {
                                 </span>
                               </p>
                               {invitation.message && (
-                                <p className="text-sm text-gray-600 mt-2 italic">"{invitation.message}"</p>
+                                <p className="text-sm text-gray-600 mt-2 italic">&quot;{invitation.message}&quot;</p>
                               )}
                               <p className="text-xs text-gray-500 mt-2">
                                 Sent {moment(invitation.created_at).fromNow()}
@@ -408,10 +407,11 @@ export default function GroupsManagement() {
               <h3 className="text-lg font-medium text-gray-900 mb-4">Create New Group</h3>
               <form onSubmit={handleCreateGroup}>
                 <div className="mb-4">
-                  <label className="block text-gray-700 text-sm font-bold mb-2">
+                  <label htmlFor="group-name" className="block text-gray-700 text-sm font-bold mb-2">
                     Group Name *
                   </label>
                   <input
+                    id="group-name"
                     type="text"
                     required
                     value={groupForm.name}
@@ -420,10 +420,11 @@ export default function GroupsManagement() {
                   />
                 </div>
                 <div className="mb-4">
-                  <label className="block text-gray-700 text-sm font-bold mb-2">
+                  <label htmlFor="group-description" className="block text-gray-700 text-sm font-bold mb-2">
                     Description
                   </label>
                   <textarea
+                    id="group-description"
                     value={groupForm.description}
                     onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })}
                     className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
@@ -459,10 +460,11 @@ export default function GroupsManagement() {
               <h3 className="text-lg font-medium text-gray-900 mb-4">Send Invitation</h3>
               <form onSubmit={handleSendInvitation}>
                 <div className="mb-4">
-                  <label className="block text-gray-700 text-sm font-bold mb-2">
+                  <label htmlFor="invite-email" className="block text-gray-700 text-sm font-bold mb-2">
                     Email Address *
                   </label>
                   <input
+                    id="invite-email"
                     type="email"
                     required
                     value={inviteForm.invited_email}
@@ -471,10 +473,11 @@ export default function GroupsManagement() {
                   />
                 </div>
                 <div className="mb-4">
-                  <label className="block text-gray-700 text-sm font-bold mb-2">
+                  <label htmlFor="invite-role" className="block text-gray-700 text-sm font-bold mb-2">
                     Role
                   </label>
                   <select
+                    id="invite-role"
                     value={inviteForm.role}
                     onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
                     className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
@@ -484,10 +487,11 @@ export default function GroupsManagement() {
                   </select>
                 </div>
                 <div className="mb-4">
-                  <label className="block text-gray-700 text-sm font-bold mb-2">
+                  <label htmlFor="invite-message" className="block text-gray-700 text-sm font-bold mb-2">
                     Message (Optional)
                   </label>
                   <textarea
+                    id="invite-message"
                     value={inviteForm.message}
                     onChange={(e) => setInviteForm({ ...inviteForm, message: e.target.value })}
                     className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"

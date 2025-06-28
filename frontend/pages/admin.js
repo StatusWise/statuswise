@@ -99,16 +99,7 @@ export default function AdminDashboard() {
     }
   }, [token])
 
-  const fetchGroupStats = useCallback(async () => {
-    try {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/groups/stats`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      setGroupStats(res.data)
-    } catch (error) {
-      logger.error('Error fetching group stats:', error)
-    }
-  }, [token])
+
 
   const fetchInvitations = useCallback(async () => {
     try {
@@ -663,9 +654,9 @@ export default function AdminDashboard() {
                           {invitation.invited_email}
                         </div>
                         {invitation.message && (
-                          <div className="text-sm text-gray-500 max-w-xs truncate italic">
-                            "{invitation.message}"
-                          </div>
+                                                     <div className="text-sm text-gray-500 max-w-xs truncate italic">
+                             &quot;{invitation.message}&quot;
+                           </div>
                         )}
                         <div className="text-xs text-gray-400">ID: {invitation.id}</div>
                       </td>

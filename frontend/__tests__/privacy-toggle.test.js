@@ -40,9 +40,49 @@ const mockConfigContext = {
 }
 
 describe('Privacy Toggle Feature', () => {
+  // Helper function to create comprehensive mock implementation
+  const createMockImplementation = (projectsData = [], subscriptionOverrides = {}) => {
+    return (url) => {
+      if (url.includes('/subscription/status')) {
+        return Promise.resolve({
+          data: {
+            tier: 'free',
+            status: null,
+            expires_at: null,
+            limits: {
+              max_projects: 1,
+              max_incidents_per_project: 5,
+              features: ['basic_status_page', 'email_notifications']
+            },
+            usage: {
+              projects: 0
+            },
+            ...subscriptionOverrides
+          }
+        })
+      }
+      if (url.includes('/projects/')) {
+        return Promise.resolve({ data: projectsData })
+      }
+      if (url.includes('/admin/stats')) {
+        return Promise.resolve({ data: {} }) // Mock admin stats if needed
+      }
+      return Promise.resolve({ data: [] })
+    }
+  }
+
   beforeEach(() => {
     jest.clearAllMocks()
+    jest.useFakeTimers() // Use fake timers to control setTimeout
     localStorageMock.getItem.mockReturnValue('mock-token')
+    // Set default comprehensive mock
+    mockedAxios.get.mockImplementation(createMockImplementation())
+  })
+
+  afterEach(() => {
+    jest.clearAllMocks()
+    jest.runOnlyPendingTimers() // Run any pending timers
+    jest.useRealTimers() // Restore real timers
   })
 
   const renderDashboard = () => {
@@ -59,7 +99,7 @@ describe('Privacy Toggle Feature', () => {
       { id: 2, name: 'Private Project', is_public: false },
     ]
 
-    mockedAxios.get.mockResolvedValueOnce({ data: mockProjects })
+    mockedAxios.get.mockImplementation(createMockImplementation(mockProjects))
 
     await act(async () => {
       renderDashboard()
@@ -81,7 +121,7 @@ describe('Privacy Toggle Feature', () => {
       { id: 2, name: 'Private Project', is_public: false },
     ]
 
-    mockedAxios.get.mockResolvedValueOnce({ data: mockProjects })
+    mockedAxios.get.mockImplementation(createMockImplementation(mockProjects))
 
     await act(async () => {
       renderDashboard()
@@ -98,7 +138,7 @@ describe('Privacy Toggle Feature', () => {
   })
 
   test('privacy checkbox is present in project creation form', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: [] }) // Empty projects list
+    mockedAxios.get.mockImplementation(createMockImplementation([])) // Empty projects list
 
     await act(async () => {
       renderDashboard()
@@ -112,13 +152,35 @@ describe('Privacy Toggle Feature', () => {
   })
 
   test('can create private project using checkbox', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: [] }) // Initial empty projects
-    mockedAxios.post.mockResolvedValueOnce({ 
-      data: { id: 1, name: 'New Private Project', is_public: false } 
+    let callCount = 0
+    const newProject = { id: 1, name: 'New Private Project', is_public: false }
+    
+    mockedAxios.get.mockImplementation((url) => {
+      if (url.includes('/subscription/status')) {
+        return Promise.resolve({
+          data: {
+            tier: 'free',
+            status: null,
+            expires_at: null,
+            limits: {
+              max_projects: 1,
+              max_incidents_per_project: 5,
+              features: ['basic_status_page', 'email_notifications']
+            },
+            usage: {
+              projects: callCount === 0 ? 0 : 1
+            }
+          }
+        })
+      }
+      if (url.includes('/projects/')) {
+        callCount++
+        return Promise.resolve({ data: callCount === 1 ? [] : [newProject] })
+      }
+      return Promise.resolve({ data: [] })
     })
-    mockedAxios.get.mockResolvedValueOnce({ 
-      data: [{ id: 1, name: 'New Private Project', is_public: false }] 
-    }) // Refreshed projects list
+    
+    mockedAxios.post.mockResolvedValueOnce({ data: newProject })
 
     await act(async () => {
       renderDashboard()
@@ -149,17 +211,34 @@ describe('Privacy Toggle Feature', () => {
   })
 
   test('toggles project privacy when toggle button is clicked', async () => {
-    const mockProjects = [
-      { id: 1, name: 'Test Project', is_public: true },
-    ]
+    let callCount = 0
+    const initialProject = { id: 1, name: 'Test Project', is_public: true }
+    const toggledProject = { id: 1, name: 'Test Project', is_public: false }
 
-    mockedAxios.get.mockResolvedValueOnce({ data: mockProjects }) // Initial load
-    mockedAxios.patch.mockResolvedValueOnce({ 
-      data: { id: 1, name: 'Test Project', is_public: false } 
+    mockedAxios.get.mockImplementation((url) => {
+      if (url.includes('/subscription/status')) {
+        return Promise.resolve({
+          data: {
+            tier: 'free',
+            status: null,
+            expires_at: null,
+            limits: {
+              max_projects: 1,
+              max_incidents_per_project: 5,
+              features: ['basic_status_page', 'email_notifications']
+            },
+            usage: { projects: 1 }
+          }
+        })
+      }
+      if (url.includes('/projects/')) {
+        callCount++
+        return Promise.resolve({ data: [callCount === 1 ? initialProject : toggledProject] })
+      }
+      return Promise.resolve({ data: [] })
     })
-    mockedAxios.get.mockResolvedValueOnce({ 
-      data: [{ id: 1, name: 'Test Project', is_public: false }] 
-    }) // Refreshed after toggle
+    
+    mockedAxios.patch.mockResolvedValueOnce({ data: toggledProject })
 
     await act(async () => {
       renderDashboard()
@@ -184,7 +263,7 @@ describe('Privacy Toggle Feature', () => {
       { id: 1, name: 'Test Project', is_public: true },
     ]
 
-    mockedAxios.get.mockResolvedValueOnce({ data: mockProjects })
+    mockedAxios.get.mockImplementation(createMockImplementation(mockProjects))
     mockedAxios.patch.mockRejectedValueOnce({
       response: { status: 403, data: { detail: 'Access denied' } }
     })
@@ -209,7 +288,7 @@ describe('Privacy Toggle Feature', () => {
       { id: 2, name: 'Private Project', is_public: false },
     ]
 
-    mockedAxios.get.mockResolvedValueOnce({ data: mockProjects })
+    mockedAxios.get.mockImplementation(createMockImplementation(mockProjects))
 
     await act(async () => {
       renderDashboard()
@@ -231,7 +310,7 @@ describe('Privacy Toggle Feature', () => {
       { id: 2, name: 'Private Project', is_public: false },
     ]
 
-    mockedAxios.get.mockResolvedValueOnce({ data: mockProjects })
+    mockedAxios.get.mockImplementation(createMockImplementation(mockProjects))
 
     await act(async () => {
       renderDashboard()

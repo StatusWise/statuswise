@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { useRouter } from 'next/router'
 import axios from 'axios'
 import GroupsManagement from '../pages/groups'
@@ -143,9 +143,9 @@ describe('GroupsManagement', () => {
     })
 
     test('opens create group modal', () => {
-      fireEvent.click(screen.getByText('Create New Group'))
+      fireEvent.click(screen.getByRole('button', { name: 'Create New Group' }))
       
-      expect(screen.getByText('Create New Group')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Create New Group' })).toBeInTheDocument()
       expect(screen.getByLabelText('Group Name *')).toBeInTheDocument()
       expect(screen.getByLabelText('Description')).toBeInTheDocument()
     })
@@ -210,26 +210,26 @@ describe('GroupsManagement', () => {
 
   describe('Invitations Tab', () => {
     beforeEach(async () => {
+      const mockInvitations = [
+        {
+          id: 1,
+          group_name: 'Test Group',
+          invited_by_name: 'John Doe',
+          invited_by_email: 'john@example.com',
+          role: 'member',
+          status: 'pending',
+          message: 'Join our team!',
+          created_at: '2023-01-01T10:00:00Z',
+          expires_at: '2023-01-08T10:00:00Z'
+        }
+      ]
+
       mockAxios.get.mockImplementation((url) => {
         if (url.includes('/groups/')) {
           return Promise.resolve({ data: [] })
         }
         if (url.includes('/invitations/')) {
-          return Promise.resolve({
-            data: [
-              {
-                id: 1,
-                group_name: 'Test Group',
-                invited_by_name: 'John Doe',
-                invited_by_email: 'john@example.com',
-                role: 'member',
-                status: 'pending',
-                message: 'Join our team!',
-                created_at: '2023-01-01T10:00:00Z',
-                expires_at: '2023-01-08T10:00:00Z'
-              }
-            ]
-          })
+          return Promise.resolve({ data: mockInvitations })
         }
         return Promise.resolve({ data: [] })
       })
@@ -242,7 +242,9 @@ describe('GroupsManagement', () => {
     })
 
     test('switches to invitations tab', async () => {
-      fireEvent.click(screen.getByText('Invitations (0)'))
+      fireEvent.click(screen.getByText((content, element) => {
+        return element.tagName === 'BUTTON' && content.includes('Invitations')
+      }))
       
       await waitFor(() => {
         expect(screen.getByText('Test Group')).toBeInTheDocument()
@@ -254,20 +256,24 @@ describe('GroupsManagement', () => {
 
     test('accepts invitation', async () => {
       mockAxios.patch.mockResolvedValue({ data: {} })
-      mockAxios.get.mockImplementation((url) => {
-        if (url.includes('/invitations/')) {
-          return Promise.resolve({ data: [] }) // Empty after accepting
-        }
-        return Promise.resolve({ data: [] })
-      })
       
-      fireEvent.click(screen.getByText('Invitations (0)'))
+      fireEvent.click(screen.getByText((content, element) => {
+        return element.tagName === 'BUTTON' && content.includes('Invitations')
+      }))
       
       await waitFor(() => {
         expect(screen.getByText('Accept')).toBeInTheDocument()
       })
       
       fireEvent.click(screen.getByText('Accept'))
+      
+      // Mock updated invitations after accepting
+      mockAxios.get.mockImplementation((url) => {
+        if (url.includes('/invitations/')) {
+          return Promise.resolve({ data: [] }) // Empty after accepting
+        }
+        return Promise.resolve({ data: [] })
+      })
       
       await waitFor(() => {
         expect(mockAxios.patch).toHaveBeenCalledWith(
@@ -280,20 +286,24 @@ describe('GroupsManagement', () => {
 
     test('declines invitation', async () => {
       mockAxios.patch.mockResolvedValue({ data: {} })
-      mockAxios.get.mockImplementation((url) => {
-        if (url.includes('/invitations/')) {
-          return Promise.resolve({ data: [] }) // Empty after declining
-        }
-        return Promise.resolve({ data: [] })
-      })
       
-      fireEvent.click(screen.getByText('Invitations (0)'))
+      fireEvent.click(screen.getByText((content, element) => {
+        return element.tagName === 'BUTTON' && content.includes('Invitations')
+      }))
       
       await waitFor(() => {
         expect(screen.getByText('Decline')).toBeInTheDocument()
       })
       
       fireEvent.click(screen.getByText('Decline'))
+      
+      // Mock updated invitations after declining
+      mockAxios.get.mockImplementation((url) => {
+        if (url.includes('/invitations/')) {
+          return Promise.resolve({ data: [] }) // Empty after declining
+        }
+        return Promise.resolve({ data: [] })
+      })
       
       await waitFor(() => {
         expect(mockAxios.patch).toHaveBeenCalledWith(
@@ -329,7 +339,7 @@ describe('GroupsManagement', () => {
     test('opens invite modal', () => {
       fireEvent.click(screen.getByText('Invite'))
       
-      expect(screen.getByText('Send Invitation')).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Send Invitation' })).toBeInTheDocument()
       expect(screen.getByLabelText('Email Address *')).toBeInTheDocument()
       expect(screen.getByLabelText('Role')).toBeInTheDocument()
       expect(screen.getByLabelText('Message (Optional)')).toBeInTheDocument()
@@ -459,9 +469,11 @@ describe('GroupsManagement', () => {
         expect(screen.getByText('Jane Member')).toBeInTheDocument()
       })
       
-      // Find the role select for Jane Member (second member)
-      const roleSelects = screen.getAllByDisplayValue('member')
-      fireEvent.change(roleSelects[0], { target: { value: 'admin' } })
+      // Find all member containers and get the role select for Jane Member (second member)
+      const memberContainers = screen.getAllByText('MEMBER').map(el => el.closest('[class*="flex items-center justify-between"]'))
+      const janeContainer = memberContainers.find(container => container.textContent.includes('Jane Member'))
+      const roleSelect = within(janeContainer).getByRole('combobox')
+      fireEvent.change(roleSelect, { target: { value: 'admin' } })
       
       await waitFor(() => {
         expect(mockAxios.patch).toHaveBeenCalledWith(
@@ -482,7 +494,11 @@ describe('GroupsManagement', () => {
         expect(screen.getByText('Jane Member')).toBeInTheDocument()
       })
       
-      fireEvent.click(screen.getByText('Remove'))
+      // Find Jane Member's container and click her Remove button
+      const memberContainers = screen.getAllByText('MEMBER').map(el => el.closest('[class*="flex items-center justify-between"]'))
+      const janeContainer = memberContainers.find(container => container.textContent.includes('Jane Member'))
+      const removeButton = within(janeContainer).getByText('Remove')
+      fireEvent.click(removeButton)
       
       await waitFor(() => {
         expect(global.confirm).toHaveBeenCalledWith('Are you sure you want to remove this member?')
@@ -502,7 +518,11 @@ describe('GroupsManagement', () => {
         expect(screen.getByText('Jane Member')).toBeInTheDocument()
       })
       
-      fireEvent.click(screen.getByText('Remove'))
+      // Find Jane Member's container and click her Remove button
+      const memberContainers = screen.getAllByText('MEMBER').map(el => el.closest('[class*="flex items-center justify-between"]'))
+      const janeContainer = memberContainers.find(container => container.textContent.includes('Jane Member'))
+      const removeButton = within(janeContainer).getByText('Remove')
+      fireEvent.click(removeButton)
       
       expect(global.confirm).toHaveBeenCalled()
       expect(mockAxios.delete).not.toHaveBeenCalled()

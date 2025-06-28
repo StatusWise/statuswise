@@ -68,17 +68,20 @@ export default function Dashboard() {
   const fetchSubscriptionStatus = useCallback(async () => {
     // Only fetch subscription status if billing is enabled
     if (!isBillingEnabled()) {
-      setSubscription({
-        tier: 'pro',  // Use "pro" as unlimited tier when billing disabled
-        status: 'active',
-        expires_at: null,
-        limits: {
-          max_projects: 999999,
-          max_incidents_per_project: 999999,
-          features: ['all_features_enabled']
-        },
-        usage: { projects: projects.length, max_projects: 999999 }
-      })
+      // Prevent infinite loop by checking if we already have the correct subscription
+      if (!subscription || subscription.tier !== 'pro') {
+        setSubscription({
+          tier: 'pro',  // Use "pro" as unlimited tier when billing disabled
+          status: 'active',
+          expires_at: null,
+          limits: {
+            max_projects: 999999,
+            max_incidents_per_project: 999999,
+            features: ['all_features_enabled']
+          },
+          usage: { projects: projects.length, max_projects: 999999 }
+        })
+      }
       return
     }
     
@@ -91,7 +94,7 @@ export default function Dashboard() {
       logger.error('Error fetching subscription:', error)
       // Don't set error for subscription fetch failures
     }
-  }, [token, isBillingEnabled, projects.length])
+  }, [token, isBillingEnabled, projects.length, subscription])
 
   const fetchCurrentUser = useCallback(async () => {
     // Only check admin status if admin functionality is enabled
