@@ -15,7 +15,8 @@ const projectSchema = z.object({
     .min(1, 'Project name is required')
     .min(2, 'Project name must be at least 2 characters long')
     .max(100, 'Project name must be less than 100 characters')
-    .transform(val => val.trim())
+    .transform(val => val.trim()),
+  is_public: z.boolean().default(false)
 })
 
 const incidentSchema = z.object({
@@ -51,7 +52,11 @@ export default function Dashboard() {
   // Project form
   const projectForm = useForm({
     resolver: zodResolver(projectSchema),
-    mode: 'onBlur'
+    mode: 'onBlur',
+    defaultValues: {
+      name: '',
+      is_public: false
+    }
   })
 
   // Incident form
@@ -241,6 +246,30 @@ export default function Dashboard() {
     }
   }
 
+  const toggleProjectPrivacy = async (projectId, isPublic) => {
+    setError('')
+    
+    try {
+      await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/projects/${projectId}`, {
+        is_public: isPublic
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      
+      // Refresh projects list to show updated privacy status
+      await fetchProjects()
+    } catch (error) {
+      logger.error('Error updating project privacy:', error)
+      if (error.response?.status === 403) {
+        setError('You do not have permission to modify this project.')
+      } else if (error.response?.status === 404) {
+        setError('Project not found.')
+      } else {
+        setError('Failed to update project privacy. Please try again.')
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen p-10">
       <div className="flex justify-between items-center mb-6">
@@ -371,6 +400,18 @@ export default function Dashboard() {
               disabled={projectForm.formState.isSubmitting}
               {...projectForm.register('name')}
             />
+            <div className="flex items-center mr-2">
+              <input
+                type="checkbox"
+                id="is_public"
+                className="mr-2"
+                disabled={projectForm.formState.isSubmitting}
+                {...projectForm.register('is_public')}
+              />
+              <label htmlFor="is_public" className="text-sm text-gray-700">
+                Public status page
+              </label>
+            </div>
             <button 
               type="submit"
               className={`px-4 py-2 rounded text-white ${projectForm.formState.isSubmitting ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600'}`}
@@ -386,14 +427,49 @@ export default function Dashboard() {
         
         <ul>
           {projects.map((project) => (
-            <li key={project.id} className="flex justify-between items-center py-2 border-b">
-              <span className="font-medium">{project.name}</span>
-              <button 
-                className="bg-gray-300 hover:bg-gray-400 px-3 py-1 rounded"
-                onClick={() => fetchIncidents(project.id)}
-              >
-                View Incidents
-              </button>
+            <li key={project.id} className="flex justify-between items-center py-3 border-b">
+              <div className="flex-1">
+                <div className="flex items-center gap-3">
+                  <span className="font-medium">{project.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      project.is_public 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {project.is_public ? 'Public' : 'Private'}
+                    </span>
+                    {project.is_public && (
+                      <a 
+                        href={`${process.env.NEXT_PUBLIC_FRONTEND_URL || window.location.origin}/status/${project.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-700 text-xs"
+                      >
+                        View Public Page →
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => toggleProjectPrivacy(project.id, !project.is_public)}
+                  className={`px-3 py-1 text-xs rounded ${
+                    project.is_public
+                      ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                      : 'bg-green-100 text-green-800 hover:bg-green-200'
+                  }`}
+                >
+                  Make {project.is_public ? 'Private' : 'Public'}
+                </button>
+                <button 
+                  className="bg-gray-300 hover:bg-gray-400 px-3 py-1 rounded text-sm"
+                  onClick={() => fetchIncidents(project.id)}
+                >
+                  View Incidents
+                </button>
+              </div>
             </li>
           ))}
         </ul>

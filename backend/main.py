@@ -493,7 +493,9 @@ def create_project(
             ),
         )
 
-    db_project = models.Project(name=project.name, owner_id=user.id)
+    db_project = models.Project(
+        name=project.name, owner_id=user.id, is_public=project.is_public
+    )
     db.add(db_project)
     db.commit()
     db.refresh(db_project)
@@ -512,6 +514,45 @@ def list_projects(
     Requires authentication.
     """
     return db.query(models.Project).filter(models.Project.owner_id == user.id).all()
+
+
+@app.patch(
+    "/projects/{project_id}", response_model=schemas.ProjectOut, tags=["projects"]
+)
+def update_project(
+    project_id: int,
+    project_update: schemas.ProjectUpdate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user),
+):
+    """
+    Update a project's settings.
+
+    Update project name and/or privacy settings. Only the project owner can update these settings.
+
+    - **project_id**: ID of the project to update
+    - **name**: New project name (optional)
+    - **is_public**: Whether the project status page should be publicly accessible (optional)
+
+    Requires authentication and project ownership.
+    """
+    # Check if user has access to the project
+    require_project_access(user, project_id, "write", db)
+
+    # Get the project
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Update fields that were provided
+    if project_update.name is not None:
+        project.name = project_update.name
+    if project_update.is_public is not None:
+        project.is_public = project_update.is_public
+
+    db.commit()
+    db.refresh(project)
+    return project
 
 
 @app.post("/incidents/", response_model=schemas.IncidentOut, tags=["incidents"])
@@ -633,14 +674,18 @@ def public_incidents(project_id: int, db: Session = Depends(get_db)):
 
     Returns all incidents for the specified project that are visible on the public status page.
     This endpoint does not require authentication and is used for public status pages.
+    Only returns incidents for projects that are marked as public.
 
     - **project_id**: ID of the project to get public incidents for
 
     **No authentication required** - this is a public endpoint.
     """
-    # Validate that the project exists
+    # Validate that the project exists and is public
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if not project.is_public:
         raise HTTPException(status_code=404, detail="Project not found")
 
     return (
