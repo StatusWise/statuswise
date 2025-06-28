@@ -6,7 +6,7 @@ This guide will help you set up Lemon Squeezy integration for StatusWise to enab
 
 1. A Lemon Squeezy account (free to start)
 2. StatusWise backend and frontend running
-3. Database access for running migrations
+3. Database access for configuration
 
 ## Step 1: Create Lemon Squeezy Account & Store
 
@@ -53,15 +53,14 @@ FRONTEND_URL=http://localhost:3000
    - `order_created`
 4. Copy the webhook secret and add it to your `.env` file
 
-## Step 6: Run Database Migration
+## Step 6: Database Setup
 
-Run the migration script to add subscription fields to your database:
-
-```bash
-cd backend
-source venv/bin/activate
-python migrate_subscription.py
-```
+Ensure your database schema includes the necessary subscription fields. These should be included by default in the user table schema:
+- `subscription_tier`
+- `subscription_customer_id` 
+- `subscription_id`
+- `subscription_status`
+- `subscription_expires_at`
 
 ## Step 7: Test the Integration
 
@@ -129,7 +128,7 @@ Lemon Squeezy automatically provides test mode for development:
 - Ensure requests library is installed: `pip install requests`
 
 ### Database Issues
-- Run the migration script if subscription fields are missing
+- Verify subscription fields exist in the user table schema
 - Check database connection and permissions
 - Verify PostgreSQL is running and accessible
 

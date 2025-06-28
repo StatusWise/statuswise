@@ -227,14 +227,7 @@ db-reset: ## Reset the database (for development)
 	cd backend && python -c "from database import engine; from models import Base; Base.metadata.drop_all(bind=engine); Base.metadata.create_all(bind=engine)"
 	@echo "✅ Database reset complete!"
 
-db-migrate-groups: ## Run group tables migration
-	@echo "🗄️  Running group tables migration..."
-	cd backend && python migrations/add_group_tables.py
-	@echo "✅ Group tables migration complete!"
 
-db-rollback-groups: ## Rollback group tables migration
-	@echo "🗄️  Rolling back group tables migration..."
-	cd backend && python migrations/add_group_tables.py --rollback
 	@echo "✅ Group tables rollback complete!"
 
 # Docker commands

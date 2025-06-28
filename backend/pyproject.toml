@@ -19,7 +19,6 @@ exclude = [
 ]
 per-file-ignores = [
     "tests/test_*.py:E402,F401",
-    "postgres_admin_migration.py:C901",
     "lemonsqueezy_service.py:C901"
 ]
 ignore = [

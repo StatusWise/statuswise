@@ -168,7 +168,7 @@ jobs:
         done
         echo "PostgreSQL is ready!"
 
-    - name: Run database migration tests
+    - name: Run database tests
       run: |
         cd backend
         python -c "from database import engine; from models import Base; Base.metadata.create_all(bind=engine)"
