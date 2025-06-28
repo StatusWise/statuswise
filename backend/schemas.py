@@ -1,6 +1,6 @@
 import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import bleach
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -18,6 +18,19 @@ class SubscriptionStatus(str, Enum):
     UNPAID = "unpaid"
     ON_TRIAL = "on_trial"
     PAUSED = "paused"
+    EXPIRED = "expired"
+
+
+class GroupRole(str, Enum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    MEMBER = "member"
+
+
+class InvitationStatus(str, Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
     EXPIRED = "expired"
 
 
@@ -183,3 +196,156 @@ class ConfigResponse(BaseModel):
     features: Dict[str, bool]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# Group Management Schemas
+
+
+class GroupCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("name")
+    @classmethod
+    def name_must_not_be_blank(cls, v):
+        if not v.strip():
+            raise ValueError("Group name must not be blank or whitespace only")
+        return v.strip()
+
+    @field_validator("description")
+    @classmethod
+    def sanitize_description(cls, v):
+        if v:
+            return bleach.clean(v.strip())
+        return v
+
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    is_active: Optional[bool] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_must_not_be_blank(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError("Group name must not be blank or whitespace only")
+        return v.strip() if v else v
+
+    @field_validator("description")
+    @classmethod
+    def sanitize_description(cls, v):
+        if v:
+            return bleach.clean(v.strip())
+        return v
+
+
+class GroupMemberOut(BaseModel):
+    id: int
+    user_id: int
+    user_email: Optional[str] = None
+    user_name: Optional[str] = None
+    user_avatar_url: Optional[str] = None
+    role: GroupRole
+    is_active: bool
+    joined_at: datetime.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GroupOut(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    owner_id: int
+    owner_email: Optional[str] = None
+    owner_name: Optional[str] = None
+    is_active: bool
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+    members_count: Optional[int] = None
+    projects_count: Optional[int] = None
+    members: Optional[List[GroupMemberOut]] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GroupSummaryOut(BaseModel):
+    """Lightweight group summary for lists"""
+
+    id: int
+    name: str
+    description: Optional[str] = None
+    owner_id: int
+    is_active: bool
+    members_count: int
+    projects_count: int
+    user_role: Optional[GroupRole] = None  # Current user's role in the group
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GroupInvitationCreate(BaseModel):
+    group_id: int
+    invited_email: Optional[str] = None
+    invited_user_id: Optional[int] = None
+    role: GroupRole = GroupRole.MEMBER
+    message: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("message")
+    @classmethod
+    def sanitize_message(cls, v):
+        if v:
+            return bleach.clean(v.strip())
+        return v
+
+    def model_post_init(self, __context):
+        # Ensure either email or user_id is provided, but not both
+        if not self.invited_email and not self.invited_user_id:
+            raise ValueError("Either invited_email or invited_user_id must be provided")
+        if self.invited_email and self.invited_user_id:
+            raise ValueError("Cannot provide both invited_email and invited_user_id")
+
+
+class GroupInvitationUpdate(BaseModel):
+    status: InvitationStatus
+    message: Optional[str] = Field(None, max_length=500)
+
+    @field_validator("message")
+    @classmethod
+    def sanitize_message(cls, v):
+        if v:
+            return bleach.clean(v.strip())
+        return v
+
+
+class GroupInvitationOut(BaseModel):
+    id: int
+    group_id: int
+    group_name: Optional[str] = None
+    invited_user_id: Optional[int] = None
+    invited_email: Optional[str] = None
+    invited_by_id: int
+    invited_by_email: Optional[str] = None
+    invited_by_name: Optional[str] = None
+    role: GroupRole
+    status: InvitationStatus
+    message: Optional[str] = None
+    expires_at: Optional[datetime.datetime] = None
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+    responded_at: Optional[datetime.datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GroupMemberUpdate(BaseModel):
+    role: Optional[GroupRole] = None
+    is_active: Optional[bool] = None
+
+
+class GroupStatsOut(BaseModel):
+    total_groups: int
+    active_groups: int
+    total_members: int
+    pending_invitations: int

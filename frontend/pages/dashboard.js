@@ -302,6 +302,13 @@ export default function Dashboard() {
               Admin Dashboard
             </button>
           )}
+          {/* Groups Management Button */}
+          <button
+            onClick={() => router.push('/groups')}
+            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+          >
+            Groups
+          </button>
           {/* Only show subscription button if billing is enabled */}
           {isBillingEnabled() && (
             <button
