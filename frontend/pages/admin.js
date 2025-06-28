@@ -11,6 +11,9 @@ export default function AdminDashboard() {
   const [subscriptions, setSubscriptions] = useState([])
   const [projects, setProjects] = useState([])
   const [incidents, setIncidents] = useState([])
+  const [groups, setGroups] = useState([])
+  const [groupStats, setGroupStats] = useState(null)
+  const [invitations, setInvitations] = useState([])
   const [activeTab, setActiveTab] = useState('overview')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -19,10 +22,17 @@ export default function AdminDashboard() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/stats`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      setStats(res.data)
+      const [statsRes, groupStatsRes] = await Promise.all([
+        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/stats`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/groups/stats`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => ({ data: { total_groups: 0, active_groups: 0, total_members: 0, pending_invitations: 0 } }))
+      ])
+      
+      setStats(statsRes.data)
+      setGroupStats(groupStatsRes.data)
     } catch (error) {
       logger.error('Error fetching stats:', error)
       if (error.response?.status === 403) {
@@ -78,6 +88,30 @@ export default function AdminDashboard() {
     }
   }, [token])
 
+  const fetchGroups = useCallback(async () => {
+    try {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/groups?limit=50`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setGroups(res.data)
+    } catch (error) {
+      logger.error('Error fetching groups:', error)
+    }
+  }, [token])
+
+
+
+  const fetchInvitations = useCallback(async () => {
+    try {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/invitations?limit=50`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setInvitations(res.data)
+    } catch (error) {
+      logger.error('Error fetching invitations:', error)
+    }
+  }, [token])
+
   useEffect(() => {
     if (!token) {
       router.push('/login')
@@ -92,12 +126,14 @@ export default function AdminDashboard() {
       else if (activeTab === 'subscriptions') await fetchSubscriptions()
       else if (activeTab === 'projects') await fetchProjects()
       else if (activeTab === 'incidents') await fetchIncidents()
+      else if (activeTab === 'groups') await fetchGroups()
+      else if (activeTab === 'invitations') await fetchInvitations()
       
       setLoading(false)
     }
 
     loadData()
-  }, [token, router, activeTab, fetchStats, fetchUsers, fetchSubscriptions, fetchProjects, fetchIncidents])
+  }, [token, router, activeTab, fetchStats, fetchUsers, fetchSubscriptions, fetchProjects, fetchIncidents, fetchGroups, fetchInvitations])
 
   const updateUserStatus = async (userId, updates) => {
     try {
@@ -187,7 +223,9 @@ export default function AdminDashboard() {
               { id: 'users', label: 'Users' },
               { id: 'subscriptions', label: 'Subscriptions' },
               { id: 'projects', label: 'Projects' },
-              { id: 'incidents', label: 'Incidents' }
+              { id: 'incidents', label: 'Incidents' },
+              { id: 'groups', label: 'Groups' },
+              { id: 'invitations', label: 'Invitations' }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -232,6 +270,33 @@ export default function AdminDashboard() {
                 color="red"
               />
             </div>
+
+            {/* Group Statistics */}
+            {groupStats && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <StatusCard 
+                  title="Total Groups" 
+                  value={groupStats.total_groups} 
+                  subtitle={`${groupStats.active_groups} active`}
+                  color="indigo"
+                />
+                <StatusCard 
+                  title="Group Members" 
+                  value={groupStats.total_members} 
+                  color="teal"
+                />
+                <StatusCard 
+                  title="Pending Invitations" 
+                  value={groupStats.pending_invitations} 
+                  color="orange"
+                />
+                <StatusCard 
+                  title="Avg Members/Group" 
+                  value={groupStats.total_groups > 0 ? Math.round(groupStats.total_members / groupStats.total_groups * 10) / 10 : 0} 
+                  color="cyan"
+                />
+              </div>
+            )}
 
             <div className="bg-white p-6 rounded-lg shadow">
               <h3 className="text-lg font-semibold mb-4">System Health</h3>
@@ -494,6 +559,148 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {moment(incident.created_at).format('MMM DD, YYYY HH:mm')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Groups Tab */}
+        {activeTab === 'groups' && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold">Group Management</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Group</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Members</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Projects</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {groups.map((group) => (
+                    <tr key={group.id}>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">{group.name}</div>
+                        {group.description && (
+                          <div className="text-sm text-gray-500 max-w-xs truncate">{group.description}</div>
+                        )}
+                        <div className="text-xs text-gray-400">ID: {group.id}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{group.owner_name || group.owner_email}</div>
+                        <div className="text-xs text-gray-500">{group.owner_email}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{group.members_count}</div>
+                        <div className="text-xs text-gray-500">
+                          {group.members?.filter(m => m.role === 'owner').length || 0} owners, {' '}
+                          {group.members?.filter(m => m.role === 'admin').length || 0} admins
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {group.projects_count}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          group.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {group.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {moment(group.created_at).format('MMM DD, YYYY')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Invitations Tab */}
+        {activeTab === 'invitations' && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold">Group Invitation Management</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invitation</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Group</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invited By</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {invitations.map((invitation) => (
+                    <tr key={invitation.id}>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">
+                          {invitation.invited_email}
+                        </div>
+                        {invitation.message && (
+                                                     <div className="text-sm text-gray-500 max-w-xs truncate italic">
+                             &quot;{invitation.message}&quot;
+                           </div>
+                        )}
+                        <div className="text-xs text-gray-400">ID: {invitation.id}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{invitation.group_name}</div>
+                        <div className="text-xs text-gray-500">Group ID: {invitation.group_id}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {invitation.invited_by_name || invitation.invited_by_email}
+                        </div>
+                        <div className="text-xs text-gray-500">{invitation.invited_by_email}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          invitation.role === 'owner' ? 'bg-red-100 text-red-800' :
+                          invitation.role === 'admin' ? 'bg-blue-100 text-blue-800' :
+                          'bg-green-100 text-green-800'
+                        }`}>
+                          {invitation.role.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          invitation.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          invitation.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                          invitation.status === 'declined' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {invitation.status.toUpperCase()}
+                        </span>
+                        {invitation.expires_at && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Expires: {moment(invitation.expires_at).format('MMM DD, YYYY')}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {moment(invitation.created_at).format('MMM DD, YYYY')}
+                        {invitation.responded_at && (
+                          <div className="text-xs">
+                            Responded: {moment(invitation.responded_at).format('MMM DD')}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}

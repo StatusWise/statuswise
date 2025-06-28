@@ -56,11 +56,6 @@ class Config:
         return cls.ENABLE_BILLING and bool(cls.LEMONSQUEEZY_API_KEY)
 
     @classmethod
-    def is_admin_enabled(cls) -> bool:
-        """Check if admin functionality is enabled."""
-        return cls.ENABLE_ADMIN
-
-    @classmethod
     def get_billing_config(cls) -> Dict[str, Any]:
         """Get billing configuration if enabled."""
         if not cls.is_billing_enabled():

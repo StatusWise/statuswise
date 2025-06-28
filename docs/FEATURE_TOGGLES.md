@@ -54,11 +54,8 @@ Response:
 ```json
 {
   "billing_enabled": false,
-  "admin_enabled": false,
   "features": {
     "subscription_management": false,
-    "admin_dashboard": false,
-    "user_management": false,
     "billing_webhooks": false,
     "subscription_limits": false
   }
@@ -160,15 +157,14 @@ ENABLE_ADMIN=false
 
 ### Example Test Case
 ```bash
-# Test Case: Billing Enabled, Admin Disabled
+# Test Case: Billing Enabled
 ENABLE_BILLING=true
-ENABLE_ADMIN=false
 
 # Test Steps
 curl -X GET http://localhost:8000/api/config
 
 # Expected Outcome
-# The response should include "billing_enabled": true and "admin_enabled": false
+# The response should include "billing_enabled": true
 
 # Post-Test Action
 ENABLE_BILLING=false
@@ -178,5 +174,5 @@ ENABLE_ADMIN=false
 curl -X GET http://localhost:8000/api/config
 
 # Expected Outcome
-# The response should include "billing_enabled": false and "admin_enabled": false
+# The response should include "billing_enabled": false
 ``` 

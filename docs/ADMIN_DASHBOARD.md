@@ -37,34 +37,25 @@ The StatusWise Admin Dashboard provides comprehensive administrative controls fo
 
 ## Setup & Installation
 
-### 1. Database Migration
+### 1. Database Setup
 
-Run the PostgreSQL migration script to add admin functionality to existing installations:
-
-```bash
-cd backend
-source venv/bin/activate
-python postgres_admin_migration.py
-```
-
-This will:
-- Add `is_admin`, `created_at`, and `updated_at` columns to the users table
-- Optionally create an initial admin user
+The admin functionality requires `is_admin`, `created_at`, and `updated_at` columns in the users table. These should be included in your database schema by default.
 
 ### 2. Admin User Creation
 
-During migration, you can create an admin user or promote an existing user:
+You can create an admin user by directly setting the `is_admin` flag in the database:
 
-```bash
-# During migration
-Would you like to create an admin user? (y/n): y
-Enter admin email: admin@yourdomain.com
-Enter admin password: [secure_password]
+```sql
+-- Connect to your database
+psql $DATABASE_URL
+
+-- Set a user as admin
+UPDATE users SET is_admin = true WHERE email = 'admin@yourdomain.com';
 ```
 
 ### 3. Backend Restart
 
-After migration, restart your backend server:
+After setting up your admin user, restart your backend server:
 
 ```bash
 # Development
@@ -159,13 +150,13 @@ Authorization: Bearer {admin_token}
 
 **Admin button not showing**
 - Ensure user has `is_admin = true` in the database
-- Check that migration was completed successfully
+- Check that the user table has the correct schema
 - Verify JWT token is valid and user is properly authenticated
 
 **403 Forbidden errors**
 - Confirm user has admin privileges
 - Check that `require_admin_access` is working correctly
-- Verify database migration added admin column
+- Verify database schema includes admin column
 
 **Data not loading**
 - Check backend server is running and accessible

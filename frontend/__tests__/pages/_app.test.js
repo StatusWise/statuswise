@@ -7,7 +7,6 @@ import configService from '../../utils/config'
 jest.mock('../../utils/config', () => ({
   loadConfig: jest.fn(),
   isBillingEnabled: jest.fn(),
-  isAdminEnabled: jest.fn(),
   isFeatureEnabled: jest.fn()
 }))
 
@@ -19,13 +18,12 @@ jest.mock('../../utils/logger', () => ({
 
 // Mock component to test with
 const TestComponent = () => {
-  const { config, isLoaded, isBillingEnabled, isAdminEnabled, isFeatureEnabled } = React.useContext(ConfigContext)
+  const { config, isLoaded, isBillingEnabled, isFeatureEnabled } = React.useContext(ConfigContext)
   
   return (
     <div>
       <div data-testid="loaded">{isLoaded ? 'loaded' : 'loading'}</div>
       <div data-testid="billing">{isBillingEnabled() ? 'billing-enabled' : 'billing-disabled'}</div>
-      <div data-testid="admin">{isAdminEnabled() ? 'admin-enabled' : 'admin-disabled'}</div>
       <div data-testid="feature">{isFeatureEnabled('test_feature') ? 'feature-enabled' : 'feature-disabled'}</div>
       {config && <div data-testid="config-data">{JSON.stringify(config)}</div>}
     </div>
@@ -53,7 +51,7 @@ describe('MyApp', () => {
 
     // Resolve the config
     act(() => {
-      resolveConfig({ billing_enabled: true, admin_enabled: false })
+      resolveConfig({ billing_enabled: true })
     })
 
     await waitFor(() => {
@@ -64,13 +62,11 @@ describe('MyApp', () => {
   it('should load config successfully and provide context', async () => {
     const mockConfig = {
       billing_enabled: true,
-      admin_enabled: false,
       features: { test_feature: true }
     }
 
     configService.loadConfig.mockResolvedValue(mockConfig)
     configService.isBillingEnabled.mockReturnValue(true)
-    configService.isAdminEnabled.mockReturnValue(false)
     configService.isFeatureEnabled.mockImplementation((feature) => 
       feature === 'test_feature'
     )
@@ -84,7 +80,6 @@ describe('MyApp', () => {
     })
 
     expect(screen.getByTestId('billing')).toHaveTextContent('billing-enabled')
-    expect(screen.getByTestId('admin')).toHaveTextContent('admin-disabled')
     expect(screen.getByTestId('feature')).toHaveTextContent('feature-enabled')
     expect(screen.getByTestId('config-data')).toHaveTextContent(JSON.stringify(mockConfig))
   })
@@ -92,7 +87,6 @@ describe('MyApp', () => {
   it('should handle config loading failure gracefully', async () => {
     configService.loadConfig.mockRejectedValue(new Error('Network error'))
     configService.isBillingEnabled.mockReturnValue(false)
-    configService.isAdminEnabled.mockReturnValue(false)
     configService.isFeatureEnabled.mockReturnValue(false)
 
     await act(async () => {
@@ -105,7 +99,6 @@ describe('MyApp', () => {
 
     // Should still render the component with disabled features
     expect(screen.getByTestId('billing')).toHaveTextContent('billing-disabled')
-    expect(screen.getByTestId('admin')).toHaveTextContent('admin-disabled')
     expect(screen.getByTestId('feature')).toHaveTextContent('feature-disabled')
   })
 
@@ -122,7 +115,6 @@ describe('MyApp', () => {
   it('should provide default context values', async () => {
     configService.loadConfig.mockResolvedValue(null)
     configService.isBillingEnabled.mockReturnValue(false)
-    configService.isAdminEnabled.mockReturnValue(false)
     configService.isFeatureEnabled.mockReturnValue(false)
 
     await act(async () => {
@@ -134,19 +126,16 @@ describe('MyApp', () => {
     })
 
     expect(screen.getByTestId('billing')).toHaveTextContent('billing-disabled')
-    expect(screen.getByTestId('admin')).toHaveTextContent('admin-disabled')
     expect(screen.getByTestId('feature')).toHaveTextContent('feature-disabled')
   })
 
   it('should handle partial config data', async () => {
     const partialConfig = {
       billing_enabled: true
-      // Missing admin_enabled and features
     }
 
     configService.loadConfig.mockResolvedValue(partialConfig)
     configService.isBillingEnabled.mockReturnValue(true)
-    configService.isAdminEnabled.mockReturnValue(false)
     configService.isFeatureEnabled.mockReturnValue(false)
 
     await act(async () => {
@@ -158,7 +147,6 @@ describe('MyApp', () => {
     })
 
     expect(screen.getByTestId('billing')).toHaveTextContent('billing-enabled')
-    expect(screen.getByTestId('admin')).toHaveTextContent('admin-disabled')
     expect(screen.getByTestId('config-data')).toHaveTextContent(JSON.stringify(partialConfig))
   })
 

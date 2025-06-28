@@ -32,6 +32,7 @@ test-backend: ## Run backend tests with proper isolation (file by file)
 	@cd backend && echo "Testing admin endpoints..." && python -m pytest tests/test_admin.py -v --tb=short
 	@cd backend && echo "Testing config module..." && python -m pytest tests/test_config.py -v --tb=short
 	@cd backend && echo "Testing feature toggles..." && python -m pytest tests/test_feature_toggles.py -v --tb=short
+	@cd backend && echo "Testing group service..." && python -m pytest tests/test_group_service.py -v --tb=short
 	@cd backend && echo "Testing LemonSqueezy service..." && python -m pytest tests/test_lemonsqueezy_service.py -v --tb=short
 	@cd backend && echo "Testing main additional (authorization)..." && python -m pytest tests/test_main_additional.py -v --tb=short
 	@cd backend && echo "Testing main admin enabled..." && python -m pytest tests/test_main_admin_enabled.py -v --tb=short
@@ -84,6 +85,25 @@ test-frontend-privacy: ## Run only frontend privacy tests
 	@echo "🎨 Running frontend privacy tests..."
 	cd frontend && npm test -- privacy-toggle.test.js
 	@echo "✅ Frontend privacy tests completed!"
+
+test-groups: ## Run all group-related tests (backend + frontend)
+	@echo "👥 Running complete group management tests..."
+	@echo "Backend group service tests:"
+	@cd backend && python -m pytest tests/test_group_service.py -v --tb=short
+	@echo ""
+	@echo "Frontend group management tests:"
+	@cd frontend && npm test -- groups.test.js
+	@echo "✅ All group tests completed!"
+
+test-groups-backend: ## Run only backend group tests (fast development testing)
+	@echo "👥 Running backend group service tests..."
+	cd backend && python -m pytest tests/test_group_service.py -v --tb=short
+	@echo "✅ Backend group tests completed!"
+
+test-groups-frontend: ## Run only frontend group tests
+	@echo "🎨 Running frontend group management tests..."
+	cd frontend && npm test -- groups.test.js
+	@echo "✅ Frontend group tests completed!"
 
 # Linting and formatting
 lint: lint-backend lint-frontend ## Run all linting
@@ -206,6 +226,9 @@ db-reset: ## Reset the database (for development)
 	@echo "🗄️  Resetting database..."
 	cd backend && python -c "from database import engine; from models import Base; Base.metadata.drop_all(bind=engine); Base.metadata.create_all(bind=engine)"
 	@echo "✅ Database reset complete!"
+
+
+	@echo "✅ Group tables rollback complete!"
 
 # Docker commands
 docker-build: ## Build Docker images

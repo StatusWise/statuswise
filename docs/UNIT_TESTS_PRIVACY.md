@@ -121,7 +121,7 @@ This document outlines the comprehensive unit tests added for the project privac
 ### End-to-End Tests
 - Browser automation tests
 - Cross-device privacy verification
-- Real database migrations
+- Real database operations
 
 ### Security Penetration Tests
 - SQL injection attempts

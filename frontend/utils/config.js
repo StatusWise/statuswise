@@ -28,7 +28,6 @@ class ConfigService {
       
       logger.info('✅ Configuration loaded successfully:', {
         billing: this.config.billing_enabled ? 'enabled' : 'disabled',
-        admin: this.config.admin_enabled ? 'enabled' : 'disabled'
       })
       
       return this.config
@@ -39,11 +38,8 @@ class ConfigService {
       // Fallback to safe defaults when backend is unreachable
       this.config = {
         billing_enabled: false,
-        admin_enabled: false,
         features: {
           subscription_management: false,
-          admin_dashboard: false,
-          user_management: false,
           billing_webhooks: false,
           subscription_limits: false
         }
@@ -56,10 +52,6 @@ class ConfigService {
 
   isBillingEnabled() {
     return this.config?.billing_enabled ?? false
-  }
-
-  isAdminEnabled() {
-    return this.config?.admin_enabled ?? false
   }
 
   isFeatureEnabled(featureName) {

@@ -88,6 +88,11 @@ def is_admin_email(email: str) -> bool:
     return bool(config.ADMIN_EMAIL and email.lower() == config.ADMIN_EMAIL.lower())
 
 
+def get_user_by_email(email: str, db: Session) -> Optional[models.User]:
+    """Get user by email address"""
+    return db.query(models.User).filter(models.User.email == email).first()
+
+
 def create_user_from_google(google_user_info: dict, db: Session) -> models.User:
     """Create a new user from Google OAuth data"""
     # Check if this should be an admin user

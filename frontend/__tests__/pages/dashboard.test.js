@@ -159,7 +159,7 @@ describe('Dashboard Page', () => {
     await waitFor(() => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
         expect.stringContaining('/projects/'),
-        { name: 'Test Project' },
+        { name: 'Test Project', is_public: false },
         expect.any(Object)
       )
     })
