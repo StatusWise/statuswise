@@ -53,7 +53,6 @@ class TestFeatureToggles:
         """Test config endpoint when billing is disabled."""
         # Mock the config
         mock_config.is_billing_enabled.return_value = False
-        mock_config.is_admin_enabled.return_value = False
 
         # Import and set up the app after mocking
         from main import app, get_db
@@ -66,16 +65,13 @@ class TestFeatureToggles:
 
         data = response.json()
         assert data["billing_enabled"] is False
-        assert data["admin_enabled"] is False
         assert data["features"]["subscription_management"] is False
-        assert data["features"]["admin_dashboard"] is False
 
     @patch("main.config")
     def test_config_endpoint_features_enabled(self, mock_config):
         """Test config endpoint when features are enabled."""
         # Mock the config
         mock_config.is_billing_enabled.return_value = True
-        mock_config.is_admin_enabled.return_value = True
 
         # Import and set up the app after mocking
         from main import app, get_db
@@ -88,9 +84,7 @@ class TestFeatureToggles:
 
         data = response.json()
         assert data["billing_enabled"] is True
-        assert data["admin_enabled"] is True
         assert data["features"]["subscription_management"] is True
-        assert data["features"]["admin_dashboard"] is True
 
     @patch("main.config")
     def test_subscription_status_billing_disabled(self, mock_config):
@@ -177,44 +171,10 @@ class TestFeatureToggles:
         assert "Billing webhooks are disabled" in response.json()["detail"]
 
     @patch("main.config")
-    def test_admin_stats_admin_disabled(self, mock_config):
-        """Test admin stats when admin is disabled."""
-        # Mock the config
-        mock_config.is_admin_enabled.return_value = False
-
-        # Import and set up the app after mocking
-        from main import app, get_db
-
-        app.dependency_overrides[get_db] = override_get_db
-        client = TestClient(app)
-
-        # Create an admin user with Google OAuth
-        db = TestingSessionLocal()
-        admin_user = create_test_user(
-            email="admin@example.com",
-            is_admin=True,
-        )
-        db.add(admin_user)
-        db.commit()
-        db.refresh(admin_user)
-
-        # Create JWT token directly
-        token = create_access_token({"sub": admin_user.email})
-
-        response = client.get(
-            "/admin/stats", headers={"Authorization": f"Bearer {token}"}
-        )
-        assert response.status_code == 503
-        assert "Admin functionality is disabled" in response.json()["detail"]
-
-        db.close()
-
-    @patch("main.config")
     def test_core_functionality_still_works(self, mock_config):
         """Test that core functionality still works when features are disabled."""
         # Mock the config
         mock_config.is_billing_enabled.return_value = False
-        mock_config.is_admin_enabled.return_value = False
 
         # Import and set up the app after mocking
         from main import app, get_db

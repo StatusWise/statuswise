@@ -36,7 +36,6 @@ Object.defineProperty(window, 'localStorage', {
 // Mock config context
 const mockConfigContext = {
   isBillingEnabled: () => false,
-  isAdminEnabled: () => false,
 }
 
 describe('Privacy Toggle Feature', () => {
@@ -55,7 +54,7 @@ describe('Privacy Toggle Feature', () => {
               features: ['basic_status_page', 'email_notifications']
             },
             usage: {
-              projects: 0
+              projects: projectsData.length
             },
             ...subscriptionOverrides
           }
@@ -65,7 +64,7 @@ describe('Privacy Toggle Feature', () => {
         return Promise.resolve({ data: projectsData })
       }
       if (url.includes('/admin/stats')) {
-        return Promise.resolve({ data: {} }) // Mock admin stats if needed
+        return Promise.reject({ response: { status: 403 } }) // Not admin by default
       }
       return Promise.resolve({ data: [] })
     }
@@ -73,7 +72,6 @@ describe('Privacy Toggle Feature', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
-    jest.useFakeTimers() // Use fake timers to control setTimeout
     localStorageMock.getItem.mockReturnValue('mock-token')
     // Set default comprehensive mock
     mockedAxios.get.mockImplementation(createMockImplementation())
@@ -81,8 +79,6 @@ describe('Privacy Toggle Feature', () => {
 
   afterEach(() => {
     jest.clearAllMocks()
-    jest.runOnlyPendingTimers() // Run any pending timers
-    jest.useRealTimers() // Restore real timers
   })
 
   const renderDashboard = () => {
@@ -152,54 +148,32 @@ describe('Privacy Toggle Feature', () => {
   })
 
   test('can create private project using checkbox', async () => {
-    let callCount = 0
+    const mockProjects = []
     const newProject = { id: 1, name: 'New Private Project', is_public: false }
     
-    mockedAxios.get.mockImplementation((url) => {
-      if (url.includes('/subscription/status')) {
-        return Promise.resolve({
-          data: {
-            tier: 'free',
-            status: null,
-            expires_at: null,
-            limits: {
-              max_projects: 1,
-              max_incidents_per_project: 5,
-              features: ['basic_status_page', 'email_notifications']
-            },
-            usage: {
-              projects: callCount === 0 ? 0 : 1
-            }
-          }
-        })
-      }
-      if (url.includes('/projects/')) {
-        callCount++
-        return Promise.resolve({ data: callCount === 1 ? [] : [newProject] })
-      }
-      return Promise.resolve({ data: [] })
-    })
-    
+    mockedAxios.get.mockImplementation(createMockImplementation(mockProjects))
     mockedAxios.post.mockResolvedValueOnce({ data: newProject })
 
     await act(async () => {
       renderDashboard()
     })
 
+    // Wait for initial load
     await waitFor(() => {
-      // Fill in project name
-      const nameInput = screen.getByPlaceholderText('New Project Name')
-      fireEvent.change(nameInput, { target: { value: 'New Private Project' } })
-
-      // Uncheck the public checkbox
-      const checkbox = screen.getByLabelText('Public status page')
-      fireEvent.click(checkbox)
-      expect(checkbox).not.toBeChecked()
-
-      // Submit form
-      const createButton = screen.getByText('Create')
-      fireEvent.click(createButton)
+      expect(screen.getByPlaceholderText('New Project Name')).toBeInTheDocument()
     })
+
+    // Fill in project name
+    const nameInput = screen.getByPlaceholderText('New Project Name')
+    fireEvent.change(nameInput, { target: { value: 'New Private Project' } })
+
+    // Checkbox should default to unchecked (private), so we don't need to click it
+    const checkbox = screen.getByLabelText('Public status page')
+    expect(checkbox).not.toBeChecked()
+
+    // Submit form
+    const createButton = screen.getByText('Create')
+    fireEvent.click(createButton)
 
     await waitFor(() => {
       expect(mockedAxios.post).toHaveBeenCalledWith(
@@ -211,43 +185,25 @@ describe('Privacy Toggle Feature', () => {
   })
 
   test('toggles project privacy when toggle button is clicked', async () => {
-    let callCount = 0
     const initialProject = { id: 1, name: 'Test Project', is_public: true }
     const toggledProject = { id: 1, name: 'Test Project', is_public: false }
 
-    mockedAxios.get.mockImplementation((url) => {
-      if (url.includes('/subscription/status')) {
-        return Promise.resolve({
-          data: {
-            tier: 'free',
-            status: null,
-            expires_at: null,
-            limits: {
-              max_projects: 1,
-              max_incidents_per_project: 5,
-              features: ['basic_status_page', 'email_notifications']
-            },
-            usage: { projects: 1 }
-          }
-        })
-      }
-      if (url.includes('/projects/')) {
-        callCount++
-        return Promise.resolve({ data: [callCount === 1 ? initialProject : toggledProject] })
-      }
-      return Promise.resolve({ data: [] })
-    })
-    
+    mockedAxios.get.mockImplementation(createMockImplementation([initialProject]))
     mockedAxios.patch.mockResolvedValueOnce({ data: toggledProject })
 
     await act(async () => {
       renderDashboard()
     })
 
+    // Wait for the project to load
     await waitFor(() => {
-      const toggleButton = screen.getByText('Make Private')
-      fireEvent.click(toggleButton)
+      expect(screen.getByText('Test Project')).toBeInTheDocument()
+      expect(screen.getByText('Make Private')).toBeInTheDocument()
     })
+
+    // Click the toggle button
+    const toggleButton = screen.getByText('Make Private')
+    fireEvent.click(toggleButton)
 
     await waitFor(() => {
       expect(mockedAxios.patch).toHaveBeenCalledWith(
@@ -272,10 +228,15 @@ describe('Privacy Toggle Feature', () => {
       renderDashboard()
     })
 
+    // Wait for the project to load
     await waitFor(() => {
-      const toggleButton = screen.getByText('Make Private')
-      fireEvent.click(toggleButton)
+      expect(screen.getByText('Test Project')).toBeInTheDocument()
+      expect(screen.getByText('Make Private')).toBeInTheDocument()
     })
+
+    // Click the toggle button
+    const toggleButton = screen.getByText('Make Private')
+    fireEvent.click(toggleButton)
 
     await waitFor(() => {
       expect(screen.getByText('You do not have permission to modify this project.')).toBeInTheDocument()

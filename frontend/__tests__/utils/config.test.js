@@ -27,11 +27,8 @@ describe('ConfigService', () => {
     it('should load configuration from backend successfully', async () => {
       const mockConfig = {
         billing_enabled: true,
-        admin_enabled: true,
         features: {
           subscription_management: true,
-          admin_dashboard: true,
-          user_management: true,
           billing_webhooks: true,
           subscription_limits: true
         }
@@ -53,7 +50,6 @@ describe('ConfigService', () => {
     it('should return cached config on subsequent calls', async () => {
       const mockConfig = {
         billing_enabled: true,
-        admin_enabled: false,
         features: {}
       }
 
@@ -72,7 +68,6 @@ describe('ConfigService', () => {
     it('should handle loading state correctly', async () => {
       const mockConfig = {
         billing_enabled: false,
-        admin_enabled: false,
         features: {}
       }
 
@@ -107,11 +102,8 @@ describe('ConfigService', () => {
 
       const expectedFallback = {
         billing_enabled: false,
-        admin_enabled: false,
         features: {
           subscription_management: false,
-          admin_dashboard: false,
-          user_management: false,
           billing_webhooks: false,
           subscription_limits: false
         }
@@ -129,7 +121,6 @@ describe('ConfigService', () => {
       const result = await configService.loadConfig()
 
       expect(result.billing_enabled).toBe(false)
-      expect(result.admin_enabled).toBe(false)
     })
   })
 
@@ -137,11 +128,8 @@ describe('ConfigService', () => {
     beforeEach(async () => {
       const mockConfig = {
         billing_enabled: true,
-        admin_enabled: false,
         features: {
           subscription_management: true,
-          admin_dashboard: false,
-          user_management: false,
           billing_webhooks: true,
           subscription_limits: true
         }
@@ -155,14 +143,8 @@ describe('ConfigService', () => {
       expect(configService.isBillingEnabled()).toBe(true)
     })
 
-    it('should return correct admin status', () => {
-      expect(configService.isAdminEnabled()).toBe(false)
-    })
-
     it('should return correct feature status', () => {
       expect(configService.isFeatureEnabled('subscription_management')).toBe(true)
-      expect(configService.isFeatureEnabled('admin_dashboard')).toBe(false)
-      expect(configService.isFeatureEnabled('user_management')).toBe(false)
       expect(configService.isFeatureEnabled('billing_webhooks')).toBe(true)
       expect(configService.isFeatureEnabled('nonexistent_feature')).toBe(false)
     })
@@ -171,7 +153,6 @@ describe('ConfigService', () => {
   describe('when config is not loaded', () => {
     it('should return false for all feature checks', () => {
       expect(configService.isBillingEnabled()).toBe(false)
-      expect(configService.isAdminEnabled()).toBe(false)
       expect(configService.isFeatureEnabled('any_feature')).toBe(false)
     })
 
@@ -188,7 +169,6 @@ describe('ConfigService', () => {
     it('should handle missing features object', async () => {
       const mockConfig = {
         billing_enabled: true,
-        admin_enabled: true
         // Missing features object
       }
 
@@ -202,14 +182,12 @@ describe('ConfigService', () => {
       configService.config = null
 
       expect(configService.isBillingEnabled()).toBe(false)
-      expect(configService.isAdminEnabled()).toBe(false)
       expect(configService.isFeatureEnabled('any_feature')).toBe(false)
     })
 
     it('should handle undefined feature names', () => {
       configService.config = {
         billing_enabled: true,
-        admin_enabled: true,
         features: {}
       }
 
@@ -223,7 +201,6 @@ describe('ConfigService', () => {
     it('should maintain state across imports', async () => {
       const mockConfig = {
         billing_enabled: true,
-        admin_enabled: true,
         features: {}
       }
 

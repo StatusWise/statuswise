@@ -8,7 +8,6 @@ export const ConfigContext = React.createContext({
   config: null,
   isLoaded: false,
   isBillingEnabled: () => false,
-  isAdminEnabled: () => false,
   isFeatureEnabled: () => false
 })
 
@@ -54,7 +53,6 @@ export default function MyApp({ Component, pageProps }) {
     config,
     isLoaded,
     isBillingEnabled: () => configService.isBillingEnabled(),
-    isAdminEnabled: () => configService.isAdminEnabled(),
     isFeatureEnabled: (feature) => configService.isFeatureEnabled(feature)
   }
 

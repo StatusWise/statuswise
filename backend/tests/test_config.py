@@ -24,7 +24,6 @@ class TestConfig:
 
             # Helper methods should return False
             assert config_module.Config.is_billing_enabled() is False
-            assert config_module.Config.is_admin_enabled() is False
 
     def test_enable_billing_true(self):
         """Test billing enabled with various true values."""
@@ -65,44 +64,6 @@ class TestConfig:
                 ), f"Failed for value: {value}"
                 assert (
                     config_module.Config.is_billing_enabled() is False
-                ), f"Failed for value: {value}"
-
-    def test_enable_admin_true(self):
-        """Test admin enabled with various true values."""
-        true_values = ["true", "True", "TRUE", "1", "yes", "YES", "on", "ON"]
-
-        for value in true_values:
-            with patch.dict(os.environ, {"ENABLE_ADMIN": value}):
-                from importlib import reload
-
-                import config as config_module
-
-                reload(config_module)
-
-                assert (
-                    config_module.Config.ENABLE_ADMIN is True
-                ), f"Failed for value: {value}"
-                assert (
-                    config_module.Config.is_admin_enabled() is True
-                ), f"Failed for value: {value}"
-
-    def test_enable_admin_false(self):
-        """Test admin disabled with various false values."""
-        false_values = ["false", "False", "FALSE", "0", "no", "NO", "off", "OFF", ""]
-
-        for value in false_values:
-            with patch.dict(os.environ, {"ENABLE_ADMIN": value}):
-                from importlib import reload
-
-                import config as config_module
-
-                reload(config_module)
-
-                assert (
-                    config_module.Config.ENABLE_ADMIN is False
-                ), f"Failed for value: {value}"
-                assert (
-                    config_module.Config.is_admin_enabled() is False
                 ), f"Failed for value: {value}"
 
     def test_is_billing_enabled_requires_api_key(self):

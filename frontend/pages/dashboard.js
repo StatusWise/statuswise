@@ -38,7 +38,7 @@ const incidentSchema = z.object({
 
 export default function Dashboard() {
   const router = useRouter()
-  const { isBillingEnabled, isAdminEnabled } = useContext(ConfigContext)
+  const { isBillingEnabled } = useContext(ConfigContext)
   
   const [projects, setProjects] = useState([])
   const [selectedProject, setSelectedProject] = useState(null)
@@ -68,9 +68,9 @@ export default function Dashboard() {
   const fetchSubscriptionStatus = useCallback(async () => {
     // Only fetch subscription status if billing is enabled
     if (!isBillingEnabled()) {
-      // Prevent infinite loop by checking if we already have the correct subscription
-      if (!subscription || subscription.tier !== 'pro') {
-        setSubscription({
+      // Set a mock subscription for unlimited usage when billing is disabled
+      setSubscription(prev => {
+        const newSub = {
           tier: 'pro',  // Use "pro" as unlimited tier when billing disabled
           status: 'active',
           expires_at: null,
@@ -80,8 +80,14 @@ export default function Dashboard() {
             features: ['all_features_enabled']
           },
           usage: { projects: projects.length, max_projects: 999999 }
-        })
-      }
+        }
+        
+        // Only update if different to prevent infinite loops
+        if (!prev || prev.tier !== newSub.tier || prev.usage.projects !== newSub.usage.projects) {
+          return newSub
+        }
+        return prev
+      })
       return
     }
     
@@ -94,28 +100,31 @@ export default function Dashboard() {
       logger.error('Error fetching subscription:', error)
       // Don't set error for subscription fetch failures
     }
-  }, [token, isBillingEnabled, projects.length, subscription])
+  }, [token, isBillingEnabled, projects.length])
 
   const fetchCurrentUser = useCallback(async () => {
-    // Only check admin status if admin functionality is enabled
-    if (!isAdminEnabled()) {
-      setCurrentUser({ is_admin: false })
-      return
-    }
-    
     try {
-      // We need to create a /me endpoint or get user info from token
-      // For now, we'll check admin status by trying to access admin stats
+      // Check admin status by trying to access admin stats
       await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/stats`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       // If successful, user is admin
-      setCurrentUser({ is_admin: true })
+      setCurrentUser(prev => {
+        if (!prev || prev.is_admin !== true) {
+          return { is_admin: true }
+        }
+        return prev
+      })
     } catch {
       // If failed, user is not admin
-      setCurrentUser({ is_admin: false })
+      setCurrentUser(prev => {
+        if (!prev || prev.is_admin !== false) {
+          return { is_admin: false }
+        }
+        return prev
+      })
     }
-  }, [token, isAdminEnabled])
+  }, [token])
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -296,8 +305,8 @@ export default function Dashboard() {
               )}
             </div>
           )}
-          {/* Only show admin dashboard button if admin is enabled and user is admin */}
-          {isAdminEnabled() && currentUser?.is_admin && (
+          {/* Show admin dashboard button if user is admin */}
+          {currentUser?.is_admin && (
             <button
               onClick={() => router.push('/admin')}
               className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600"

@@ -104,7 +104,6 @@ class TestConfiguration:
         assert response.status_code == 200
         data = response.json()
         assert "billing_enabled" in data
-        assert "admin_enabled" in data
         assert "features" in data
 
 

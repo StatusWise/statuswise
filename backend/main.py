@@ -150,9 +150,7 @@ def create_tables():
     # Log feature toggle status
     print(f"🔧 Feature Toggles:")
     billing_status = "✅ Enabled" if config.is_billing_enabled() else "❌ Disabled"
-    admin_status = "✅ Enabled" if config.is_admin_enabled() else "❌ Disabled"
     print(f"  - Billing: {billing_status}")
-    print(f"  - Admin: {admin_status}")
 
 
 def get_db():
@@ -250,7 +248,6 @@ def get_config():
 
     **Feature Toggles Returned:**
     - `billing_enabled`: Whether subscription/billing features are available
-    - `admin_enabled`: Whether admin dashboard features are available
     - `features`: Detailed feature availability mapping
 
     **Usage:**
@@ -259,11 +256,8 @@ def get_config():
     """
     return {
         "billing_enabled": config.is_billing_enabled(),
-        "admin_enabled": config.is_admin_enabled(),
         "features": {
             "subscription_management": config.is_billing_enabled(),
-            "admin_dashboard": config.is_admin_enabled(),
-            "user_management": config.is_admin_enabled(),
             "billing_webhooks": config.is_billing_enabled(),
             "subscription_limits": config.is_billing_enabled(),
         },
@@ -993,527 +987,464 @@ def respond_to_group_invitation(
 
 
 # Admin endpoints (conditionally enabled)
-if config.is_admin_enabled():
 
-    @app.get("/admin/stats", response_model=schemas.AdminStatsOut, tags=["admin"])
-    def get_admin_stats(
-        user: models.User = Depends(auth.get_current_user),
-        db: Session = Depends(get_db),
-    ):
-        """
-        Get system-wide statistics for admin dashboard.
 
-        Returns comprehensive statistics including user counts, subscription metrics,
-        project and incident counts, and revenue data.
+@app.get("/admin/stats", response_model=schemas.AdminStatsOut, tags=["admin"])
+def get_admin_stats(
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get system-wide statistics for admin dashboard.
 
-        Requires admin privileges.
-        """
-        require_admin_access(user)
+    Returns comprehensive statistics including user counts, subscription metrics,
+    project and incident counts, and revenue data.
 
-        # User statistics
-        total_users = db.query(func.count(models.User.id)).scalar()
-        active_users = (
-            db.query(func.count(models.User.id))
-            .filter(models.User.is_active.is_(True))
-            .scalar()
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+
+    # User statistics
+    total_users = db.query(func.count(models.User.id)).scalar()
+    active_users = (
+        db.query(func.count(models.User.id))
+        .filter(models.User.is_active.is_(True))
+        .scalar()
+    )
+    pro_subscribers = (
+        db.query(func.count(models.User.id))
+        .filter(models.User.subscription_tier == models.SubscriptionTier.PRO)
+        .scalar()
+    )
+    free_users = total_users - pro_subscribers
+
+    # Project and incident statistics
+    total_projects = db.query(func.count(models.Project.id)).scalar()
+    total_incidents = db.query(func.count(models.Incident.id)).scalar()
+    unresolved_incidents = (
+        db.query(func.count(models.Incident.id))
+        .filter(models.Incident.resolved.is_(False))
+        .scalar()
+    )
+
+    return {
+        "total_users": total_users,
+        "active_users": active_users,
+        "pro_subscribers": pro_subscribers,
+        "free_users": free_users,
+        "total_projects": total_projects,
+        "total_incidents": total_incidents,
+        "unresolved_incidents": unresolved_incidents,
+        "monthly_revenue": None,  # Could be calculated from LemonSqueezy data
+    }
+
+
+@app.get("/admin/users", response_model=list[schemas.AdminUserOut], tags=["admin"])
+def get_admin_users(
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(100, ge=1, description="Maximum number of records to return"),
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all users for admin management.
+
+    Returns a paginated list of all users with detailed information including
+    subscription status, creation dates, and admin flags.
+
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return (max 100)
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+
+    return (
+        db.query(models.User)
+        .order_by(models.User.created_at.desc())
+        .offset(skip)
+        .limit(min(limit, 100))
+        .all()
+    )
+
+
+@app.get(
+    "/admin/subscriptions",
+    response_model=list[schemas.AdminSubscriptionOut],
+    tags=["admin"],
+)
+def get_admin_subscriptions(
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(100, ge=1, description="Maximum number of records to return"),
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all subscriptions for admin management.
+
+    Returns a paginated list of all subscriptions with detailed billing information
+    and associated user data.
+
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return (max 100)
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+
+    subscriptions = (
+        db.query(models.Subscription)
+        .join(models.User)
+        .order_by(models.Subscription.created_at.desc())
+        .offset(skip)
+        .limit(min(limit, 100))
+        .all()
+    )
+
+    # Add user email to subscription data
+    result = []
+    for sub in subscriptions:
+        sub_dict = schemas.AdminSubscriptionOut.model_validate(sub).model_dump()
+        sub_dict["user_email"] = sub.user.email
+        result.append(schemas.AdminSubscriptionOut(**sub_dict))
+
+    return result
+
+
+@app.get(
+    "/admin/projects", response_model=list[schemas.AdminProjectOut], tags=["admin"]
+)
+def get_admin_projects(
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(100, ge=1, description="Maximum number of records to return"),
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all projects for admin management.
+
+    Returns a paginated list of all projects with owner information and
+    incident counts.
+
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return (max 100)
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+
+    projects = (
+        db.query(
+            models.Project,
+            models.User.email.label("owner_email"),
+            func.count(models.Incident.id).label("incidents_count"),
+            func.sum(case((models.Incident.resolved.is_(False), 1), else_=0)).label(
+                "unresolved_incidents_count"
+            ),
         )
-        pro_subscribers = (
-            db.query(func.count(models.User.id))
-            .filter(models.User.subscription_tier == models.SubscriptionTier.PRO)
-            .scalar()
-        )
-        free_users = total_users - pro_subscribers
+        .join(models.User, models.Project.owner_id == models.User.id)
+        .outerjoin(models.Incident, models.Project.id == models.Incident.project_id)
+        .group_by(models.Project.id, models.User.email)
+        .order_by(models.Project.id.desc())
+        .offset(skip)
+        .limit(min(limit, 100))
+        .all()
+    )
 
-        # Project and incident statistics
-        total_projects = db.query(func.count(models.Project.id)).scalar()
-        total_incidents = db.query(func.count(models.Incident.id)).scalar()
-        unresolved_incidents = (
-            db.query(func.count(models.Incident.id))
-            .filter(models.Incident.resolved.is_(False))
-            .scalar()
-        )
-
-        return {
-            "total_users": total_users,
-            "active_users": active_users,
-            "pro_subscribers": pro_subscribers,
-            "free_users": free_users,
-            "total_projects": total_projects,
-            "total_incidents": total_incidents,
-            "unresolved_incidents": unresolved_incidents,
-            "monthly_revenue": None,  # Could be calculated from LemonSqueezy data
+    result = []
+    for project, owner_email, incidents_count, unresolved_count in projects:
+        project_dict = {
+            "id": project.id,
+            "name": project.name,
+            "owner_id": project.owner_id,
+            "owner_email": owner_email,
+            "incidents_count": incidents_count,
+            "unresolved_incidents_count": unresolved_count,
         }
+        result.append(schemas.AdminProjectOut(**project_dict))
 
-    @app.get("/admin/users", response_model=list[schemas.AdminUserOut], tags=["admin"])
-    def get_admin_users(
-        skip: int = Query(
-            0, ge=0, description="Number of records to skip for pagination"
-        ),
-        limit: int = Query(
-            100, ge=1, description="Maximum number of records to return"
-        ),
-        user: models.User = Depends(auth.get_current_user),
-        db: Session = Depends(get_db),
-    ):
-        """
-        Get all users for admin management.
+    return result
 
-        Returns a paginated list of all users with detailed information including
-        subscription status, creation dates, and admin flags.
 
-        - **skip**: Number of records to skip (for pagination)
-        - **limit**: Maximum number of records to return (max 100)
+@app.get("/admin/users/{user_id}", response_model=schemas.AdminUserOut, tags=["admin"])
+def get_admin_user(
+    user_id: int = Path(..., gt=0, description="ID of the user to retrieve"),
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get detailed information about a specific user.
 
-        Requires admin privileges.
-        """
-        require_admin_access(user)
+    Returns comprehensive user information including subscription details,
+    activity status, and administrative flags.
 
-        return (
-            db.query(models.User)
-            .order_by(models.User.created_at.desc())
-            .offset(skip)
-            .limit(min(limit, 100))
-            .all()
-        )
+    - **user_id**: ID of the user to retrieve
 
-    @app.get(
-        "/admin/subscriptions",
-        response_model=list[schemas.AdminSubscriptionOut],
-        tags=["admin"],
-    )
-    def get_admin_subscriptions(
-        skip: int = Query(
-            0, ge=0, description="Number of records to skip for pagination"
-        ),
-        limit: int = Query(
-            100, ge=1, description="Maximum number of records to return"
-        ),
-        user: models.User = Depends(auth.get_current_user),
-        db: Session = Depends(get_db),
-    ):
-        """
-        Get all subscriptions for admin management.
+    Requires admin privileges.
+    """
+    require_admin_access(current_user)
 
-        Returns a paginated list of all subscriptions with detailed billing information
-        and associated user data.
-
-        - **skip**: Number of records to skip (for pagination)
-        - **limit**: Maximum number of records to return (max 100)
-
-        Requires admin privileges.
-        """
-        require_admin_access(user)
-
-        subscriptions = (
-            db.query(models.Subscription)
-            .join(models.User)
-            .order_by(models.Subscription.created_at.desc())
-            .offset(skip)
-            .limit(min(limit, 100))
-            .all()
-        )
-
-        # Add user email to subscription data
-        result = []
-        for sub in subscriptions:
-            sub_dict = schemas.AdminSubscriptionOut.model_validate(sub).model_dump()
-            sub_dict["user_email"] = sub.user.email
-            result.append(schemas.AdminSubscriptionOut(**sub_dict))
-
-        return result
-
-    @app.get(
-        "/admin/projects", response_model=list[schemas.AdminProjectOut], tags=["admin"]
-    )
-    def get_admin_projects(
-        skip: int = Query(
-            0, ge=0, description="Number of records to skip for pagination"
-        ),
-        limit: int = Query(
-            100, ge=1, description="Maximum number of records to return"
-        ),
-        user: models.User = Depends(auth.get_current_user),
-        db: Session = Depends(get_db),
-    ):
-        """
-        Get all projects for admin management.
-
-        Returns a paginated list of all projects with owner information and
-        incident counts.
-
-        - **skip**: Number of records to skip (for pagination)
-        - **limit**: Maximum number of records to return (max 100)
-
-        Requires admin privileges.
-        """
-        require_admin_access(user)
-
-        projects = (
-            db.query(
-                models.Project,
-                models.User.email.label("owner_email"),
-                func.count(models.Incident.id).label("incidents_count"),
-                func.sum(case((models.Incident.resolved.is_(False), 1), else_=0)).label(
-                    "unresolved_incidents_count"
-                ),
-            )
-            .join(models.User, models.Project.owner_id == models.User.id)
-            .outerjoin(models.Incident, models.Project.id == models.Incident.project_id)
-            .group_by(models.Project.id, models.User.email)
-            .order_by(models.Project.id.desc())
-            .offset(skip)
-            .limit(min(limit, 100))
-            .all()
-        )
-
-        result = []
-        for project, owner_email, incidents_count, unresolved_count in projects:
-            project_dict = {
-                "id": project.id,
-                "name": project.name,
-                "owner_id": project.owner_id,
-                "owner_email": owner_email,
-                "incidents_count": incidents_count,
-                "unresolved_incidents_count": unresolved_count,
-            }
-            result.append(schemas.AdminProjectOut(**project_dict))
-
-        return result
-
-    @app.get(
-        "/admin/users/{user_id}", response_model=schemas.AdminUserOut, tags=["admin"]
-    )
-    def get_admin_user(
-        user_id: int = Path(..., gt=0, description="ID of the user to retrieve"),
-        current_user: models.User = Depends(auth.get_current_user),
-        db: Session = Depends(get_db),
-    ):
-        """
-        Get detailed information about a specific user.
-
-        Returns comprehensive user information including subscription details,
-        activity status, and administrative flags.
-
-        - **user_id**: ID of the user to retrieve
-
-        Requires admin privileges.
-        """
-        require_admin_access(current_user)
-
-        user = db.query(models.User).filter(models.User.id == user_id).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-            )
-
-        return user
-
-    @app.patch(
-        "/admin/users/{user_id}", response_model=schemas.AdminUserOut, tags=["admin"]
-    )
-    def update_admin_user(
-        user_id: int = Path(..., gt=0, description="ID of the user to update"),
-        is_active: Optional[bool] = None,
-        is_admin: Optional[bool] = None,
-        current_user: models.User = Depends(auth.get_current_user),
-        db: Session = Depends(get_db),
-    ):
-        """
-        Update user administrative settings.
-
-        Allows administrators to modify user account status and administrative privileges.
-        Only administrators can access this endpoint.
-
-        - **user_id**: ID of the user to update
-        - **is_active**: Optional boolean to set user active status
-        - **is_admin**: Optional boolean to set user admin privileges
-
-        **Note**: Administrators cannot remove their own admin privileges.
-
-        Requires admin privileges.
-        """
-        require_admin_access(current_user)
-
-        # Get the user to update
-        user = db.query(models.User).filter(models.User.id == user_id).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-            )
-
-        # Prevent admin from removing their own admin privileges
-        if user.id == current_user.id and is_admin is False:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot remove your own admin privileges",
-            )
-
-        # Update user attributes
-        if is_active is not None:
-            user.is_active = is_active
-        if is_admin is not None:
-            user.is_admin = is_admin
-
-        db.commit()
-        db.refresh(user)
-
-        return user
-
-    @app.get(
-        "/admin/incidents", response_model=list[schemas.IncidentOut], tags=["admin"]
-    )
-    def get_admin_incidents(
-        skip: int = Query(
-            0, ge=0, description="Number of records to skip for pagination"
-        ),
-        limit: int = Query(
-            100, ge=1, description="Maximum number of records to return"
-        ),
-        resolved: Optional[bool] = None,
-        user: models.User = Depends(auth.get_current_user),
-        db: Session = Depends(get_db),
-    ):
-        """
-        Get all incidents for admin oversight.
-
-        Returns a paginated list of all incidents in the system with optional
-        filtering by resolution status.
-
-        - **skip**: Number of records to skip (for pagination)
-        - **limit**: Maximum number of records to return (max 100)
-        - **resolved**: Filter by resolution status (optional)
-
-        Requires admin privileges.
-        """
-        require_admin_access(user)
-
-        query = db.query(models.Incident).join(
-            models.Project, models.Incident.project_id == models.Project.id
-        )
-
-        if resolved is not None:
-            query = query.filter(models.Incident.resolved == resolved)
-
-        incidents = (
-            query.order_by(models.Incident.created_at.desc())
-            .offset(skip)
-            .limit(min(limit, 100))
-            .all()
-        )
-
-        return incidents
-
-    @app.get(
-        "/admin/groups/stats", response_model=schemas.GroupStatsOut, tags=["admin"]
-    )
-    def get_admin_group_stats(
-        user: models.User = Depends(auth.get_current_user),
-        db: Session = Depends(get_db),
-    ):
-        """
-        Get group management statistics for admin dashboard.
-
-        Returns comprehensive statistics about groups, memberships, and invitations
-        for admin oversight and monitoring.
-
-        Requires admin privileges.
-        """
-        require_admin_access(user)
-        return GroupService.get_group_stats(db)
-
-    @app.get("/admin/groups", response_model=list[schemas.GroupOut], tags=["admin"])
-    def get_admin_groups(
-        skip: int = Query(
-            0, ge=0, description="Number of records to skip for pagination"
-        ),
-        limit: int = Query(
-            100, ge=1, description="Maximum number of records to return"
-        ),
-        include_inactive: bool = Query(False, description="Include inactive groups"),
-        user: models.User = Depends(auth.get_current_user),
-        db: Session = Depends(get_db),
-    ):
-        """
-        Get all groups for admin oversight.
-
-        Returns a paginated list of all groups in the system with detailed
-        information including member counts and owner details.
-
-        - **skip**: Number of records to skip (for pagination)
-        - **limit**: Maximum number of records to return (max 100)
-        - **include_inactive**: Include inactive/deleted groups
-
-        Requires admin privileges.
-        """
-        require_admin_access(user)
-
-        query = db.query(models.Group).options(
-            selectinload(models.Group.owner), selectinload(models.Group.members)
-        )
-
-        if not include_inactive:
-            query = query.filter(models.Group.is_active)
-
-        groups = (
-            query.order_by(models.Group.created_at.desc())
-            .offset(skip)
-            .limit(min(limit, 100))
-            .all()
-        )
-
-        # Convert to response format with counts
-        result = []
-        for group in groups:
-            active_members = [m for m in group.members if m.is_active]
-            projects_count = (
-                db.query(func.count(models.Project.id))
-                .filter(models.Project.group_id == group.id)
-                .scalar()
-            )
-
-            group_data = schemas.GroupOut(
-                id=group.id,
-                name=group.name,
-                description=group.description,
-                owner_id=group.owner_id,
-                owner_email=group.owner.email,
-                owner_name=group.owner.name,
-                is_active=group.is_active,
-                created_at=group.created_at,
-                updated_at=group.updated_at,
-                members_count=len(active_members),
-                projects_count=projects_count,
-                members=[
-                    schemas.GroupMemberOut(
-                        id=member.id,
-                        user_id=member.user_id,
-                        user_email=member.user.email,
-                        user_name=member.user.name,
-                        user_avatar_url=member.user.avatar_url,
-                        role=member.role,
-                        is_active=member.is_active,
-                        joined_at=member.joined_at,
-                    )
-                    for member in active_members
-                ],
-            )
-            result.append(group_data)
-
-        return result
-
-    @app.get(
-        "/admin/invitations",
-        response_model=list[schemas.GroupInvitationOut],
-        tags=["admin"],
-    )
-    def get_admin_invitations(
-        skip: int = Query(
-            0, ge=0, description="Number of records to skip for pagination"
-        ),
-        limit: int = Query(
-            100, ge=1, description="Maximum number of records to return"
-        ),
-        status: Optional[schemas.InvitationStatus] = Query(
-            None, description="Filter by status"
-        ),
-        user: models.User = Depends(auth.get_current_user),
-        db: Session = Depends(get_db),
-    ):
-        """
-        Get all group invitations for admin oversight.
-
-        Returns a paginated list of all group invitations in the system with
-        optional status filtering.
-
-        - **skip**: Number of records to skip (for pagination)
-        - **limit**: Maximum number of records to return (max 100)
-        - **status**: Filter by invitation status (optional)
-
-        Requires admin privileges.
-        """
-        require_admin_access(user)
-
-        query = (
-            db.query(models.GroupInvitation)
-            .join(models.Group, models.GroupInvitation.group_id == models.Group.id)
-            .join(models.User, models.GroupInvitation.invited_by_id == models.User.id)
-        )
-
-        if status:
-            query = query.filter(models.GroupInvitation.status == status)
-
-        invitations = (
-            query.order_by(models.GroupInvitation.created_at.desc())
-            .offset(skip)
-            .limit(min(limit, 100))
-            .all()
-        )
-
-        result = []
-        for invitation in invitations:
-            group = invitation.group
-            inviter = invitation.invited_by
-
-            result.append(
-                schemas.GroupInvitationOut(
-                    id=invitation.id,
-                    group_id=invitation.group_id,
-                    group_name=group.name,
-                    invited_user_id=invitation.invited_user_id,
-                    invited_email=invitation.invited_email,
-                    invited_by_id=invitation.invited_by_id,
-                    invited_by_email=inviter.email,
-                    invited_by_name=inviter.name,
-                    role=invitation.role,
-                    status=invitation.status,
-                    message=invitation.message,
-                    expires_at=invitation.expires_at,
-                    created_at=invitation.created_at,
-                    updated_at=invitation.updated_at,
-                    responded_at=invitation.responded_at,
-                )
-            )
-
-        return result
-
-else:
-    # Provide disabled endpoints when admin functionality is turned off
-    def _admin_disabled_error():
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
         raise HTTPException(
-            status_code=503, detail="Admin functionality is disabled on this instance"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
-    @app.get("/admin/stats", tags=["admin"])
-    def get_admin_stats_disabled():
-        """Admin stats endpoint when admin functionality is disabled."""
-        _admin_disabled_error()
+    return user
 
-    @app.get("/admin/users", tags=["admin"])
-    def get_admin_users_disabled():
-        """Admin users endpoint when admin functionality is disabled."""
-        _admin_disabled_error()
 
-    @app.get("/admin/subscriptions", tags=["admin"])
-    def get_admin_subscriptions_disabled():
-        """Admin subscriptions endpoint when admin functionality is disabled."""
-        _admin_disabled_error()
+@app.patch(
+    "/admin/users/{user_id}", response_model=schemas.AdminUserOut, tags=["admin"]
+)
+def update_admin_user(
+    user_id: int = Path(..., gt=0, description="ID of the user to update"),
+    is_active: Optional[bool] = None,
+    is_admin: Optional[bool] = None,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update user administrative settings.
 
-    @app.get("/admin/projects", tags=["admin"])
-    def get_admin_projects_disabled():
-        """Admin projects endpoint when admin functionality is disabled."""
-        _admin_disabled_error()
+    Allows administrators to modify user account status and administrative privileges.
+    Only administrators can access this endpoint.
 
-    @app.get("/admin/users/{user_id}", tags=["admin"])
-    def get_admin_user_disabled(user_id: int):
-        """Admin user details endpoint when admin functionality is disabled."""
-        _admin_disabled_error()
+    - **user_id**: ID of the user to update
+    - **is_active**: Optional boolean to set user active status
+    - **is_admin**: Optional boolean to set user admin privileges
 
-    @app.patch("/admin/users/{user_id}", tags=["admin"])
-    def update_admin_user_disabled(user_id: int):
-        """Admin user update endpoint when admin functionality is disabled."""
-        _admin_disabled_error()
+    **Note**: Administrators cannot remove their own admin privileges.
 
-    @app.get("/admin/incidents", tags=["admin"])
-    def get_admin_incidents_disabled():
-        """Admin incidents endpoint when admin functionality is disabled."""
-        _admin_disabled_error()
+    Requires admin privileges.
+    """
+    require_admin_access(current_user)
+
+    # Get the user to update
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    # Prevent admin from removing their own admin privileges
+    if user.id == current_user.id and is_admin is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove your own admin privileges",
+        )
+
+    # Update user attributes
+    if is_active is not None:
+        user.is_active = is_active
+    if is_admin is not None:
+        user.is_admin = is_admin
+
+    db.commit()
+    db.refresh(user)
+
+    return user
+
+
+@app.get("/admin/incidents", response_model=list[schemas.IncidentOut], tags=["admin"])
+def get_admin_incidents(
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(100, ge=1, description="Maximum number of records to return"),
+    resolved: Optional[bool] = None,
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all incidents for admin oversight.
+
+    Returns a paginated list of all incidents in the system with optional
+    filtering by resolution status.
+
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return (max 100)
+    - **resolved**: Filter by resolution status (optional)
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+
+    query = db.query(models.Incident).join(
+        models.Project, models.Incident.project_id == models.Project.id
+    )
+
+    if resolved is not None:
+        query = query.filter(models.Incident.resolved == resolved)
+
+    incidents = (
+        query.order_by(models.Incident.created_at.desc())
+        .offset(skip)
+        .limit(min(limit, 100))
+        .all()
+    )
+
+    return incidents
+
+
+@app.get("/admin/groups/stats", response_model=schemas.GroupStatsOut, tags=["admin"])
+def get_admin_group_stats(
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get group management statistics for admin dashboard.
+
+    Returns comprehensive statistics about groups, memberships, and invitations
+    for admin oversight and monitoring.
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+    return GroupService.get_group_stats(db)
+
+
+@app.get("/admin/groups", response_model=list[schemas.GroupOut], tags=["admin"])
+def get_admin_groups(
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(100, ge=1, description="Maximum number of records to return"),
+    include_inactive: bool = Query(False, description="Include inactive groups"),
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all groups for admin oversight.
+
+    Returns a paginated list of all groups in the system with detailed
+    information including member counts and owner details.
+
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return (max 100)
+    - **include_inactive**: Include inactive/deleted groups
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+
+    query = db.query(models.Group).options(
+        selectinload(models.Group.owner), selectinload(models.Group.members)
+    )
+
+    if not include_inactive:
+        query = query.filter(models.Group.is_active)
+
+    groups = (
+        query.order_by(models.Group.created_at.desc())
+        .offset(skip)
+        .limit(min(limit, 100))
+        .all()
+    )
+
+    # Convert to response format with counts
+    result = []
+    for group in groups:
+        active_members = [m for m in group.members if m.is_active]
+        projects_count = (
+            db.query(func.count(models.Project.id))
+            .filter(models.Project.group_id == group.id)
+            .scalar()
+        )
+
+        group_data = schemas.GroupOut(
+            id=group.id,
+            name=group.name,
+            description=group.description,
+            owner_id=group.owner_id,
+            owner_email=group.owner.email,
+            owner_name=group.owner.name,
+            is_active=group.is_active,
+            created_at=group.created_at,
+            updated_at=group.updated_at,
+            members_count=len(active_members),
+            projects_count=projects_count,
+            members=[
+                schemas.GroupMemberOut(
+                    id=member.id,
+                    user_id=member.user_id,
+                    user_email=member.user.email,
+                    user_name=member.user.name,
+                    user_avatar_url=member.user.avatar_url,
+                    role=member.role,
+                    is_active=member.is_active,
+                    joined_at=member.joined_at,
+                )
+                for member in active_members
+            ],
+        )
+        result.append(group_data)
+
+    return result
+
+
+@app.get(
+    "/admin/invitations",
+    response_model=list[schemas.GroupInvitationOut],
+    tags=["admin"],
+)
+def get_admin_invitations(
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(100, ge=1, description="Maximum number of records to return"),
+    status: Optional[schemas.InvitationStatus] = Query(
+        None, description="Filter by status"
+    ),
+    user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all group invitations for admin oversight.
+
+    Returns a paginated list of all group invitations in the system with
+    optional status filtering.
+
+    - **skip**: Number of records to skip (for pagination)
+    - **limit**: Maximum number of records to return (max 100)
+    - **status**: Filter by invitation status (optional)
+
+    Requires admin privileges.
+    """
+    require_admin_access(user)
+
+    query = (
+        db.query(models.GroupInvitation)
+        .join(models.Group, models.GroupInvitation.group_id == models.Group.id)
+        .join(models.User, models.GroupInvitation.invited_by_id == models.User.id)
+    )
+
+    if status:
+        query = query.filter(models.GroupInvitation.status == status)
+
+    invitations = (
+        query.order_by(models.GroupInvitation.created_at.desc())
+        .offset(skip)
+        .limit(min(limit, 100))
+        .all()
+    )
+
+    result = []
+    for invitation in invitations:
+        group = invitation.group
+        inviter = invitation.invited_by
+
+        result.append(
+            schemas.GroupInvitationOut(
+                id=invitation.id,
+                group_id=invitation.group_id,
+                group_name=group.name,
+                invited_user_id=invitation.invited_user_id,
+                invited_email=invitation.invited_email,
+                invited_by_id=invitation.invited_by_id,
+                invited_by_email=inviter.email,
+                invited_by_name=inviter.name,
+                role=invitation.role,
+                status=invitation.status,
+                message=invitation.message,
+                expires_at=invitation.expires_at,
+                created_at=invitation.created_at,
+                updated_at=invitation.updated_at,
+                responded_at=invitation.responded_at,
+            )
+        )
+
+    return result
