@@ -4,7 +4,7 @@ Group management service with invitation and membership functionality.
 
 import datetime
 import secrets
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy import and_, func, or_
@@ -30,7 +30,7 @@ class GroupService:
                 and_(
                     models.Group.owner_id == owner.id,
                     models.Group.name == group_data.name,
-                    models.Group.is_active == True,
+                    models.Group.is_active,
                 )
             )
             .first()
@@ -76,14 +76,14 @@ class GroupService:
             .filter(
                 and_(
                     models.GroupMember.user_id == user.id,
-                    models.GroupMember.is_active == True,
+                    models.GroupMember.is_active,
                 )
             )
             .group_by(models.Group.id, models.GroupMember.role)
         )
 
         if not include_inactive:
-            query = query.filter(models.Group.is_active == True)
+            query = query.filter(models.Group.is_active)
 
         results = query.all()
 
@@ -196,7 +196,7 @@ class GroupService:
                         models.Group.owner_id == group.owner_id,
                         models.Group.name == group_data.name,
                         models.Group.id != group_id,
-                        models.Group.is_active == True,
+                        models.Group.is_active,
                     )
                 )
                 .first()
@@ -305,7 +305,7 @@ class GroupService:
                     and_(
                         models.GroupMember.group_id == invitation_data.group_id,
                         models.GroupMember.user_id == invited_user.id,
-                        models.GroupMember.is_active == True,
+                        models.GroupMember.is_active,
                     )
                 )
                 .first()
@@ -395,9 +395,14 @@ class GroupService:
             )
 
         # Check if invitation is expired
-        if invitation.expires_at and invitation.expires_at < datetime.datetime.now(
-            datetime.timezone.utc
-        ):
+        current_time = datetime.datetime.now(datetime.timezone.utc)
+        # Make timezone-aware comparison
+        expires_at = invitation.expires_at
+        if expires_at and expires_at.tzinfo is None:
+            # Convert to UTC if timezone-naive
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+
+        if expires_at and expires_at < current_time:
             invitation.status = models.InvitationStatus.EXPIRED
             db.commit()
             raise HTTPException(
@@ -419,7 +424,7 @@ class GroupService:
                     and_(
                         models.GroupMember.group_id == invitation.group_id,
                         models.GroupMember.user_id == user.id,
-                        models.GroupMember.is_active == True,
+                        models.GroupMember.is_active,
                     )
                 )
                 .first()
@@ -612,7 +617,7 @@ class GroupService:
                 and_(
                     models.GroupMember.user_id == user_id,
                     models.GroupMember.group_id == group_id,
-                    models.GroupMember.is_active == True,
+                    models.GroupMember.is_active,
                 )
             )
             .first()
@@ -624,12 +629,12 @@ class GroupService:
         total_groups = db.query(func.count(models.Group.id)).scalar()
         active_groups = (
             db.query(func.count(models.Group.id))
-            .filter(models.Group.is_active == True)
+            .filter(models.Group.is_active)
             .scalar()
         )
         total_members = (
             db.query(func.count(models.GroupMember.id))
-            .filter(models.GroupMember.is_active == True)
+            .filter(models.GroupMember.is_active)
             .scalar()
         )
         pending_invitations = (

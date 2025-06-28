@@ -10,7 +10,6 @@ This migration adds the following tables:
 Run with: python migrations/add_group_tables.py
 """
 
-import datetime
 import os
 import sys
 
@@ -19,7 +18,7 @@ from sqlalchemy import text
 # Add the parent directory to sys.path to import our modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database import SessionLocal, engine
+from database import SessionLocal
 
 
 def run_migration():

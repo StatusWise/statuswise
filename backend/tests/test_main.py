@@ -284,9 +284,9 @@ class TestIncidents:
 
 class TestPublicAPI:
     def test_public_incidents_success(self, test_user):
-        # Create a project and incident
+        # Create a public project and incident
         db = TestingSessionLocal()
-        project = Project(name="Test Project", owner_id=test_user.id)
+        project = Project(name="Test Project", owner_id=test_user.id, is_public=True)
         db.add(project)
         db.commit()
         db.refresh(project)
@@ -308,9 +308,9 @@ class TestPublicAPI:
         assert data[0]["title"] == "Public Incident"
 
     def test_public_incidents_empty_project(self, test_user):
-        # Create a project with no incidents
+        # Create a public project with no incidents
         db = TestingSessionLocal()
-        project = Project(name="Empty Project", owner_id=test_user.id)
+        project = Project(name="Empty Project", owner_id=test_user.id, is_public=True)
         db.add(project)
         db.commit()
         db.refresh(project)

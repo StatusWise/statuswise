@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import case, func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 import auth
 import models
@@ -827,7 +827,7 @@ def update_group(
 
     Returns the updated group information.
     """
-    updated_group = GroupService.update_group(group_id, group_update, user, db)
+    GroupService.update_group(group_id, group_update, user, db)
     return GroupService.get_group_with_members(group_id, user, db)
 
 
@@ -1352,7 +1352,7 @@ if config.is_admin_enabled():
         )
 
         if not include_inactive:
-            query = query.filter(models.Group.is_active == True)
+            query = query.filter(models.Group.is_active)
 
         groups = (
             query.order_by(models.Group.created_at.desc())
