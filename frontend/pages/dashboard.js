@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react'
+import Head from 'next/head'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -7,6 +8,7 @@ import { useRouter } from 'next/router'
 import moment from 'moment'
 import logger from '../utils/logger'
 import { ConfigContext } from './_app'
+import { Button, Card, Modal, Badge, Alert, Input } from '../components/ui'
 
 // Zod schemas for validation
 const projectSchema = z.object({
@@ -46,6 +48,12 @@ export default function Dashboard() {
   const [subscription, setSubscription] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  // Modals
+  const [showCreateProject, setShowCreateProject] = useState(false)
+  const [showCreateIncident, setShowCreateIncident] = useState(false)
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : ''
 
@@ -145,11 +153,19 @@ export default function Dashboard() {
   }, [token, router])
 
   useEffect(() => {
-    if (!token) router.push('/login')
-    else {
-      fetchProjects()
-      fetchSubscriptionStatus()
-      fetchCurrentUser()
+    if (!token) {
+      router.push('/login')
+    } else {
+      const loadData = async () => {
+        setLoading(true)
+        await Promise.all([
+          fetchProjects(),
+          fetchSubscriptionStatus(),
+          fetchCurrentUser()
+        ])
+        setLoading(false)
+      }
+      loadData()
     }
   }, [token, router, fetchProjects, fetchSubscriptionStatus, fetchCurrentUser])
 
@@ -160,6 +176,7 @@ export default function Dashboard() {
     
     if (subscriptionStatus === 'success') {
       setError('')
+      setSuccess('Subscription upgraded successfully!')
       // Refresh subscription status
       setTimeout(() => {
         fetchSubscriptionStatus()
@@ -175,12 +192,15 @@ export default function Dashboard() {
 
   const onCreateProject = async (data) => {
     setError('')
+    setSuccess('')
     
     try {
       await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/projects/`, data, {
         headers: { Authorization: `Bearer ${token}` }
       })
+      setSuccess('Project created successfully!')
       projectForm.reset()
+      setShowCreateProject(false)
       await fetchProjects()
       await fetchSubscriptionStatus() // Refresh usage
     } catch (error) {
@@ -211,6 +231,7 @@ export default function Dashboard() {
   const fetchIncidents = async (projectId) => {
     setSelectedProject(projectId)
     setError('')
+    setSuccess('')
     try {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/incidents/${projectId}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -225,6 +246,7 @@ export default function Dashboard() {
 
   const onCreateIncident = async (data) => {
     setError('')
+    setSuccess('')
     
     try {
       await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/incidents/`, {
@@ -233,7 +255,9 @@ export default function Dashboard() {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       })
+      setSuccess('Incident created successfully!')
       incidentForm.reset()
+      setShowCreateIncident(false)
       await fetchIncidents(selectedProject)
     } catch (error) {
       logger.error('Error creating incident:', error)
@@ -260,6 +284,7 @@ export default function Dashboard() {
 
   const toggleProjectPrivacy = async (projectId, isPublic) => {
     setError('')
+    setSuccess('')
     
     try {
       await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/projects/${projectId}`, {
@@ -268,6 +293,7 @@ export default function Dashboard() {
         headers: { Authorization: `Bearer ${token}` }
       })
       
+      setSuccess(`Project ${isPublic ? 'made public' : 'made private'} successfully!`)
       // Refresh projects list to show updated privacy status
       await fetchProjects()
     } catch (error) {
@@ -282,315 +308,567 @@ export default function Dashboard() {
     }
   }
 
-  return (
-    <div className="min-h-screen p-10">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <div className="flex items-center space-x-4">
-          {/* Only show subscription status and upgrade button if billing is enabled */}
-          {isBillingEnabled() && subscription && (
-            <div className="flex items-center space-x-2">
-              <span className={`px-2 py-1 rounded text-sm font-medium ${
-                subscription.tier === 'pro' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-              }`}>
-                {subscription.tier?.toUpperCase() || 'FREE'}
-              </span>
-              {subscription.tier === 'free' && (
-                <button
-                  onClick={() => router.push('/subscription')}
-                  className="bg-purple-500 text-white px-3 py-1 rounded text-sm hover:bg-purple-600"
-                >
-                  Upgrade
-                </button>
-              )}
-            </div>
-          )}
-          {/* Show admin dashboard button if user is admin */}
-          {currentUser?.is_admin && (
-            <button
-              onClick={() => router.push('/admin')}
-              className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600"
-            >
-              Admin Dashboard
-            </button>
-          )}
-          {/* Groups Management Button */}
-          <button
-            onClick={() => router.push('/groups')}
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-          >
-            Groups
-          </button>
-          {/* Only show subscription button if billing is enabled */}
-          {isBillingEnabled() && (
-            <button
-              onClick={() => router.push('/subscription')}
-              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-            >
-              Subscription
-            </button>
-          )}
-          <button 
-            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-            onClick={() => {
-              localStorage.removeItem('token')
-              router.push('/login')
-            }}
-          >
-            Logout
-          </button>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex justify-center items-center">
+        <div className="text-center">
+          <div className="loading-spinner w-8 h-8 mx-auto mb-4"></div>
+          <div className="text-lg text-gray-600">Loading dashboard...</div>
         </div>
       </div>
+    )
+  }
 
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
-      )}
-
-      {/* Subscription Status Card - only show if billing is enabled */}
-      {isBillingEnabled() && subscription && (
-        <div className="bg-white p-4 rounded shadow mb-6 border-l-4 border-blue-500">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="font-semibold text-gray-900">
-                {subscription.tier === 'pro' ? (isBillingEnabled() ? 'Pro Plan' : 'Unlimited Plan') : 'Free Plan'}
-              </h3>
-              <div className="text-sm text-gray-600 mt-1">
-                Projects: {subscription.usage.projects} / {subscription.limits.max_projects === 999999 ? '∞' : subscription.limits.max_projects}
-                {subscription.tier === 'free' && subscription.usage.projects >= subscription.limits.max_projects && (
-                  <span className="text-red-600 ml-2">Limit reached!</span>
-                )}
-              </div>
+  return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#0f172a' }}>
+      <Head>
+        <title>StatusWise - Dashboard</title>
+      </Head>
+      {/* Navigation */}
+      <nav style={{ backgroundColor: '#1e293b', borderBottom: '1px solid #334155' }}>
+        <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '0 1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '4rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#f1f5f9' }}>StatusWise</h1>
             </div>
-            {subscription.tier === 'free' && (
-              <div className="text-right">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <button
+                onClick={() => router.push('/dashboard')}
+                style={{
+                  background: 'transparent',
+                  color: router.pathname === '/dashboard' ? '#60a5fa' : '#94a3b8',
+                  backgroundColor: router.pathname === '/dashboard' ? '#1e3a8a' : 'transparent',
+                  border: 'none',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  if (router.pathname !== '/dashboard') e.target.style.color = '#f1f5f9'
+                }}
+                onMouseOut={(e) => {
+                  if (router.pathname !== '/dashboard') e.target.style.color = '#94a3b8'
+                }}
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => router.push('/groups')}
+                style={{
+                  background: 'transparent',
+                  color: router.pathname === '/groups' ? '#60a5fa' : '#94a3b8',
+                  backgroundColor: router.pathname === '/groups' ? '#1e3a8a' : 'transparent',
+                  border: 'none',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  if (router.pathname !== '/groups') e.target.style.color = '#f1f5f9'
+                }}
+                onMouseOut={(e) => {
+                  if (router.pathname !== '/groups') e.target.style.color = '#94a3b8'
+                }}
+              >
+                Groups
+              </button>
+              {currentUser?.is_admin && (
                 <button
-                  onClick={() => router.push('/subscription')}
-                  className="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 text-sm"
+                  onClick={() => router.push('/admin')}
+                  style={{
+                    background: 'transparent',
+                    color: router.pathname === '/admin' ? '#60a5fa' : '#94a3b8',
+                    backgroundColor: router.pathname === '/admin' ? '#1e3a8a' : 'transparent',
+                    border: 'none',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    transition: 'color 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    if (router.pathname !== '/admin') e.target.style.color = '#f1f5f9'
+                  }}
+                  onMouseOut={(e) => {
+                    if (router.pathname !== '/admin') e.target.style.color = '#94a3b8'
+                  }}
                 >
-                  Upgrade to Pro
+                  Admin
                 </button>
-                <div className="text-xs text-gray-500 mt-1">
-                  Get 10 projects & more features
-                </div>
-              </div>
-            )}
-            {subscription.tier === 'pro' && subscription.status && (
-              <div className="text-right">
-                <div className={`text-sm font-medium ${
-                  subscription.status === 'active' ? 'text-green-600' : 
-                  subscription.status === 'on_trial' ? 'text-blue-600' : 'text-yellow-600'
-                }`}>
-                  {subscription.status === 'on_trial' ? 'Trial Active' : 
-                   subscription.status === 'active' ? 'Active' : subscription.status}
-                </div>
-                {subscription.expires_at && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    {subscription.status === 'on_trial' ? 'Trial ends' : 'Next billing'}: {' '}
-                    {new Date(subscription.expires_at).toLocaleDateString()}
-                  </div>
-                )}
-              </div>
-            )}
-                            {subscription.tier === 'pro' && !isBillingEnabled() && (
-              <div className="text-right">
-                <div className="text-sm font-medium text-green-600">
-                  All Features Enabled
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Billing disabled on this instance
-                </div>
-              </div>
-            )}
+              )}
+              {isBillingEnabled() && subscription && (
+                <span style={{
+                  backgroundColor: subscription.tier === 'pro' ? '#3b82f6' : '#6b7280',
+                  color: 'white',
+                  padding: '0.25rem 0.5rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.75rem',
+                  fontWeight: '500'
+                }}>
+                  {subscription.tier?.toUpperCase() || 'FREE'}
+                </span>
+              )}
+              <button 
+                style={{
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#dc2626'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#ef4444'}
+                onClick={() => {
+                  localStorage.removeItem('token')
+                  router.push('/login')
+                }}
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
-      )}
+      </nav>
 
-      <div className="bg-white p-6 rounded shadow mb-8">
-        <h3 className="text-xl font-semibold mb-4">Projects</h3>
-        
-        <form onSubmit={projectForm.handleSubmit(onCreateProject)} className="mb-4">
-          <div className="flex mb-2">
-            <input 
-              className={`border p-2 flex-1 mr-2 ${projectForm.formState.errors.name ? 'border-red-500' : 'border-gray-300'}`}
-              type="text" 
-              placeholder="New Project Name" 
-              disabled={projectForm.formState.isSubmitting}
-              {...projectForm.register('name')}
-            />
-            <div className="flex items-center mr-2">
-              <input
-                type="checkbox"
-                id="is_public"
-                className="mr-2"
-                disabled={projectForm.formState.isSubmitting}
-                {...projectForm.register('is_public')}
-              />
-              <label htmlFor="is_public" className="text-sm text-gray-700">
-                Public status page
-              </label>
-            </div>
-            <button 
-              type="submit"
-              className={`px-4 py-2 rounded text-white ${projectForm.formState.isSubmitting ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600'}`}
-              disabled={projectForm.formState.isSubmitting}
-            >
-              {projectForm.formState.isSubmitting ? 'Creating...' : 'Create'}
-            </button>
+      {/* Main Content */}
+      <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '2rem' }}>
+          <div>
+            <h1 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#f1f5f9', marginBottom: '0.5rem' }}>Dashboard</h1>
+            <p style={{ color: '#94a3b8', fontSize: '1rem' }}>
+              Manage your projects and monitor system status
+            </p>
           </div>
-          {projectForm.formState.errors.name && (
-            <p className="text-red-500 text-sm">{projectForm.formState.errors.name.message}</p>
-          )}
-        </form>
-        
-        <ul>
-          {projects.map((project) => (
-            <li key={project.id} className="flex justify-between items-center py-3 border-b">
-              <div className="flex-1">
-                <div className="flex items-center gap-3">
-                  <span className="font-medium">{project.name}</span>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      project.is_public 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {project.is_public ? 'Public' : 'Private'}
-                    </span>
-                    {project.is_public && (
-                      <a 
-                        href={`${process.env.NEXT_PUBLIC_FRONTEND_URL || window.location.origin}/status/${project.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-500 hover:text-blue-700 text-xs"
-                      >
-                        View Public Page →
-                      </a>
-                    )}
+        </div>
+
+        {/* Alerts */}
+        {error && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <Alert variant="error" dismissible onDismiss={() => setError('')}>
+              {error}
+            </Alert>
+          </div>
+        )}
+        {success && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <Alert variant="success" dismissible onDismiss={() => setSuccess('')}>
+              {success}
+            </Alert>
+          </div>
+        )}
+
+        {/* Subscription Status Card - only show if billing is enabled */}
+        {isBillingEnabled() && subscription && (
+          <div style={{ marginBottom: '2rem' }}>
+            <Card style={{ borderLeft: '4px solid #3b82f6' }}>
+              <Card.Body>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <h3 style={{ fontWeight: '600', color: '#f1f5f9', marginBottom: '0.25rem' }}>
+                      {subscription.tier === 'pro' ? (isBillingEnabled() ? 'Pro Plan' : 'Unlimited Plan') : 'Free Plan'}
+                    </h3>
+                    <div style={{ fontSize: '0.875rem', color: '#cbd5e1' }}>
+                      Projects: <span style={{ fontWeight: '500' }}>{subscription.usage.projects}</span> / {subscription.limits.max_projects === 999999 ? '∞' : subscription.limits.max_projects}
+                      {subscription.tier === 'free' && subscription.usage.projects >= subscription.limits.max_projects && (
+                        <Badge variant="danger" style={{ marginLeft: '0.5rem' }}>Limit reached!</Badge>
+                      )}
+                    </div>
                   </div>
+                  {subscription.tier === 'free' && (
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ marginBottom: '0.5rem' }}>
+                        <Button onClick={() => router.push('/subscription')}>
+                          Upgrade to Pro
+                        </Button>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                        Get 10 projects & more features
+                      </div>
+                    </div>
+                  )}
+                  {subscription.tier === 'pro' && subscription.status && (
+                    <div style={{ textAlign: 'right' }}>
+                      <Badge variant={
+                        subscription.status === 'active' ? 'success' : 
+                        subscription.status === 'on_trial' ? 'primary' : 'warning'
+                      }>
+                        {subscription.status === 'on_trial' ? 'Trial Active' : 
+                         subscription.status === 'active' ? 'Active' : subscription.status}
+                      </Badge>
+                      {subscription.expires_at && (
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                          {subscription.status === 'on_trial' ? 'Trial ends' : 'Next billing'}: {' '}
+                          {new Date(subscription.expires_at).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {subscription.tier === 'pro' && !isBillingEnabled() && (
+                    <div style={{ textAlign: 'right' }}>
+                      <Badge variant="success">
+                        All Features Enabled
+                      </Badge>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                        Billing disabled on this instance
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Card.Body>
+            </Card>
+          </div>
+        )}
+
+        {/* Projects Section */}
+        <div style={{ marginBottom: '2rem' }}>
+          <Card>
+            <Card.Header>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#f1f5f9' }}>Projects</h3>
+                <Button onClick={() => setShowCreateProject(true)}>
+                  Create Project
+                </Button>
+              </div>
+            </Card.Header>
+            <Card.Body>
+            {projects.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem 0' }}>
+                <div style={{ 
+                  width: '4rem', 
+                  height: '4rem', 
+                  backgroundColor: '#334155', 
+                  borderRadius: '50%', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  margin: '0 auto 1rem auto' 
+                }}>
+                  <svg style={{ width: '2rem', height: '2rem', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: '500', color: '#f1f5f9', marginBottom: '0.5rem' }}>No projects yet</h3>
+                <p style={{ color: '#94a3b8', marginBottom: '1.5rem' }}>Create your first project to start monitoring your services.</p>
+                <Button onClick={() => setShowCreateProject(true)}>
+                  Create Your First Project
+                </Button>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #475569' }}>
+                      <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#f1f5f9' }}>
+                        Project Name
+                      </th>
+                      <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#f1f5f9' }}>
+                        Status
+                      </th>
+                      <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#f1f5f9' }}>
+                        Public Page
+                      </th>
+                      <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600', color: '#f1f5f9' }}>
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projects.map((project) => (
+                      <tr key={project.id} style={{ borderBottom: '1px solid #475569' }}>
+                        <td style={{ padding: '1rem 0.75rem' }}>
+                          <div style={{ fontWeight: '500', color: '#f1f5f9' }}>
+                            {project.name}
+                          </div>
+                        </td>
+                        <td style={{ padding: '1rem 0.75rem', textAlign: 'center' }}>
+                          <Badge variant={project.is_public ? 'success' : 'warning'}>
+                            {project.is_public ? 'Public' : 'Private'}
+                          </Badge>
+                        </td>
+                        <td style={{ padding: '1rem 0.75rem', textAlign: 'center' }}>
+                          {project.is_public ? (
+                            <a 
+                              href={`${process.env.NEXT_PUBLIC_FRONTEND_URL || window.location.origin}/status/${project.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                color: '#60a5fa', 
+                                fontSize: '0.875rem',
+                                textDecoration: 'none'
+                              }}
+                              onMouseOver={(e) => e.target.style.color = '#3b82f6'}
+                              onMouseOut={(e) => e.target.style.color = '#60a5fa'}
+                            >
+                              View Page
+                              <svg 
+                                style={{ width: '1em', height: '1em', marginLeft: '0.25rem' }} 
+                                fill="none" 
+                                stroke="currentColor" 
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
+                          ) : (
+                            <span style={{ color: '#9ca3af', fontSize: '0.875rem' }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '1rem 0.75rem', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => toggleProjectPrivacy(project.id, !project.is_public)}
+                            >
+                              Make {project.is_public ? 'Private' : 'Public'}
+                            </Button>
+                            <Button 
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => fetchIncidents(project.id)}
+                            >
+                              View Incidents
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            </Card.Body>
+          </Card>
+        </div>
+
+        {/* Incidents Section */}
+        {selectedProject && (
+          <Card style={{ animation: 'fadeIn 0.3s ease-in-out' }}>
+            <Card.Header>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#f1f5f9' }}>
+                  Incidents - {projects.find(p => p.id === selectedProject)?.name}
+                </h3>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedProject(null)
+                      setIncidents([])
+                    }}
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowCreateIncident(true)}
+                  >
+                    Create Incident
+                  </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => toggleProjectPrivacy(project.id, !project.is_public)}
-                  className={`px-3 py-1 text-xs rounded ${
-                    project.is_public
-                      ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                      : 'bg-green-100 text-green-800 hover:bg-green-200'
-                  }`}
-                >
-                  Make {project.is_public ? 'Private' : 'Public'}
-                </button>
-                <button 
-                  className="bg-gray-300 hover:bg-gray-400 px-3 py-1 rounded text-sm"
-                  onClick={() => fetchIncidents(project.id)}
-                >
-                  View Incidents
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-        {projects.length === 0 && (
-          <p className="text-gray-500 text-center py-4">No projects yet. Create your first project above!</p>
+            </Card.Header>
+            <Card.Body>
+              {incidents.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem 0' }}>
+                  <div style={{ 
+                    width: '3rem', 
+                    height: '3rem', 
+                    backgroundColor: '#334155', 
+                    borderRadius: '50%', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    margin: '0 auto 0.75rem auto' 
+                  }}>
+                    <svg style={{ width: '1.5rem', height: '1.5rem', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  <h4 style={{ fontWeight: '500', color: '#f1f5f9', marginBottom: '0.25rem' }}>No incidents</h4>
+                  <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginBottom: '1rem' }}>This project has no incidents yet.</p>
+                  <Button size="sm" onClick={() => setShowCreateIncident(true)}>
+                    Create First Incident
+                  </Button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {incidents.map((incident) => (
+                    <div key={incident.id} style={{ 
+                      padding: '1rem', 
+                      border: '1px solid #475569', 
+                      borderRadius: '0.5rem',
+                      backgroundColor: '#334155'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                        <h4 style={{ fontWeight: '500', color: '#f1f5f9' }}>{incident.title}</h4>
+                        <Badge variant={
+                          incident.status === 'resolved' ? 'success' :
+                          incident.status === 'investigating' ? 'warning' :
+                          incident.status === 'identified' ? 'primary' : 'danger'
+                        }>
+                          {incident.status?.toUpperCase()}
+                        </Badge>
+                      </div>
+                      <p style={{ color: '#cbd5e1', fontSize: '0.875rem', marginBottom: '0.5rem' }}>{incident.description}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8' }}>
+                        <span>Created {moment(incident.created_at).fromNow()}</span>
+                        {incident.scheduled_start && (
+                          <span>Scheduled: {moment(incident.scheduled_start).format('MMM D, YYYY HH:mm')}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card.Body>
+          </Card>
         )}
       </div>
 
-      {selectedProject && (
-        <div className="bg-white p-6 rounded shadow">
-          <h3 className="text-xl font-semibold mb-4">Incidents for Project {selectedProject}</h3>
-          
-          <form onSubmit={incidentForm.handleSubmit(onCreateIncident)} className="mb-4">
-            <div className="mb-2">
-              <input 
-                className={`border p-2 w-full ${incidentForm.formState.errors.title ? 'border-red-500' : 'border-gray-300'}`}
-                type="text" 
-                placeholder="Incident Title" 
+      {/* Create Project Modal */}
+      <Modal 
+        isOpen={showCreateProject} 
+        onClose={() => setShowCreateProject(false)}
+        size="md"
+      >
+        <Modal.Header onClose={() => setShowCreateProject(false)}>
+          Create New Project
+        </Modal.Header>
+        <form onSubmit={projectForm.handleSubmit(onCreateProject)}>
+          <Modal.Body>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <Input
+                label="Project Name"
+                error={projectForm.formState.errors.name?.message}
+                disabled={projectForm.formState.isSubmitting}
+                {...projectForm.register('name')}
+                placeholder="Enter project name"
+              />
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  id="is_public"
+                  style={{ 
+                    width: '1rem', 
+                    height: '1rem', 
+                    accentColor: '#3b82f6',
+                    marginRight: '0.5rem'
+                  }}
+                  disabled={projectForm.formState.isSubmitting}
+                  {...projectForm.register('is_public')}
+                />
+                <label htmlFor="is_public" style={{ fontSize: '0.875rem', color: '#e2e8f0' }}>
+                  Create public status page
+                </label>
+              </div>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreateProject(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit"
+              loading={projectForm.formState.isSubmitting}
+            >
+              Create Project
+            </Button>
+          </Modal.Footer>
+        </form>
+      </Modal>
+
+      {/* Create Incident Modal */}
+      <Modal 
+        isOpen={showCreateIncident} 
+        onClose={() => setShowCreateIncident(false)}
+        size="lg"
+      >
+        <Modal.Header onClose={() => setShowCreateIncident(false)}>
+          Create New Incident
+        </Modal.Header>
+        <form onSubmit={incidentForm.handleSubmit(onCreateIncident)}>
+          <Modal.Body>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <Input
+                label="Incident Title"
+                error={incidentForm.formState.errors.title?.message}
                 disabled={incidentForm.formState.isSubmitting}
                 {...incidentForm.register('title')}
+                placeholder="Brief description of the incident"
               />
-              {incidentForm.formState.errors.title && (
-                <p className="text-red-500 text-sm mt-1">{incidentForm.formState.errors.title.message}</p>
-              )}
-            </div>
-            
-            <div className="mb-2">
-              <textarea 
-                className={`border p-2 w-full h-24 resize-vertical ${incidentForm.formState.errors.description ? 'border-red-500' : 'border-gray-300'}`}
-                placeholder="Description (detailed explanation of the incident)" 
-                disabled={incidentForm.formState.isSubmitting}
-                {...incidentForm.register('description')}
-              />
-              {incidentForm.formState.errors.description && (
-                <p className="text-red-500 text-sm mt-1">{incidentForm.formState.errors.description.message}</p>
-              )}
-            </div>
-            
-            <div className="mb-2">
-              <input
-                className="border border-gray-300 p-2 w-full"
+              <div>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: '0.875rem', 
+                  fontWeight: '500', 
+                  color: '#e2e8f0', 
+                  marginBottom: '0.25rem' 
+                }}>Description</label>
+                <textarea
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem 0.75rem',
+                    border: incidentForm.formState.errors.description ? '1px solid #ef4444' : '1px solid #475569',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem',
+                    backgroundColor: '#334155',
+                    color: '#f1f5f9',
+                    resize: 'vertical'
+                  }}
+                  rows="4"
+                  disabled={incidentForm.formState.isSubmitting}
+                  {...incidentForm.register('description')}
+                  placeholder="Detailed description of the incident"
+                />
+                {incidentForm.formState.errors.description && (
+                  <p style={{ color: '#fca5a5', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                    {incidentForm.formState.errors.description.message}
+                  </p>
+                )}
+              </div>
+              <Input
+                label="Scheduled Start (Optional)"
                 type="datetime-local"
-                placeholder="Scheduled Start (optional)"
                 disabled={incidentForm.formState.isSubmitting}
                 {...incidentForm.register('scheduled_start')}
               />
-              <p className="text-gray-500 text-sm mt-1">Optional: Schedule this incident for a future maintenance window</p>
             </div>
-            
-            <button 
-              type="submit"
-              className={`px-4 py-2 rounded text-white ${incidentForm.formState.isSubmitting ? 'bg-gray-400' : 'bg-green-500 hover:bg-green-600'}`}
-              disabled={incidentForm.formState.isSubmitting}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreateIncident(false)}
             >
-              {incidentForm.formState.isSubmitting ? 'Creating...' : 'Create Incident'}
-            </button>
-          </form>
-          
-          <ul>
-            {incidents.map((incident) => (
-              <li key={incident.id} className="py-4 border-b flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="font-bold text-lg">{incident.title}</div>
-                  <div className="text-gray-600 mt-1">{incident.description}</div>
-                  {incident.scheduled_start && (
-                    <div className="text-sm text-yellow-600 mt-1">
-                      Scheduled for: {moment(incident.scheduled_start).format('LLL')}
-                    </div>
-                  )}
-                  <div className="text-sm text-gray-500 mt-1">Reported: {moment(incident.created_at).format('LLL')}</div>
-                  <div className={`mt-1 font-medium ${incident.resolved ? 'text-green-600' : 'text-red-500'}`}>
-                    {incident.resolved
-                      ? `Resolved at ${moment(incident.resolved_at).format('LLL')}`
-                      : 'Open'}
-                  </div>
-                </div>
-                {!incident.resolved && (
-                  <button
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded ml-4 flex-shrink-0"
-                    onClick={async () => {
-                      try {
-                        await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/incidents/${incident.id}/resolve`, {}, {
-                          headers: { Authorization: `Bearer ${token}` }
-                        });
-                        await fetchIncidents(selectedProject);
-                      } catch (error) {
-                        logger.error('Error resolving incident:', error)
-                        setError('Failed to resolve incident. Please try again.')
-                      }
-                    }}
-                  >
-                    Resolve
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-          {incidents.length === 0 && (
-            <p className="text-gray-500 text-center py-4">No incidents reported for this project yet.</p>
-          )}
-        </div>
-      )}
+              Cancel
+            </Button>
+            <Button 
+              type="submit"
+              loading={incidentForm.formState.isSubmitting}
+            >
+              Create Incident
+            </Button>
+          </Modal.Footer>
+        </form>
+      </Modal>
     </div>
   )
 } 
