@@ -8,7 +8,7 @@ python-dotenv==1.1.1
 python-multipart==0.0.20
 requests==2.32.4
 python-jose[cryptography]==3.5.0
-google-auth==2.34.0
+google-auth==2.40.3
 google-auth-oauthlib==1.2.2
 bleach==6.2.0
 pytest==8.4.1
