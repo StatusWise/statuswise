@@ -4,7 +4,7 @@ python-multipart==0.0.20
 pydantic==2.5.3
 sqlalchemy==2.0.41
 psycopg2-binary==2.9.10
-python-dotenv==1.1.0
+python-dotenv==1.1.1
 python-multipart==0.0.20
 requests==2.32.4
 python-jose[cryptography]==3.5.0
