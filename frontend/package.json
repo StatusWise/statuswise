@@ -36,7 +36,7 @@
     "eslint": "9.30.0",
     "eslint-config-next": "15.3.5",
     "eslint-plugin-react": "7.37.5",
-    "jest": "30.0.3",
+    "jest": "30.0.4",
     "jest-environment-jsdom": "30.0.4"
   }
 }
