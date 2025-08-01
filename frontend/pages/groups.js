@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback} from 'react'
 import axios from 'axios'
 import { useRouter } from 'next/router'
 import moment from 'moment'
 import logger from '../utils/logger'
+import { Button, Card, Modal, Badge, Alert, Input } from '../components/ui'
 
 export default function GroupsManagement() {
   const router = useRouter()
@@ -10,6 +11,7 @@ export default function GroupsManagement() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [currentUser, setCurrentUser] = useState(null)
 
   // Groups data
   const [groups, setGroups] = useState([])
@@ -19,9 +21,12 @@ export default function GroupsManagement() {
   // Invitations data
   const [invitations, setInvitations] = useState([])
 
-  // Forms
+  // Modals
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showGroupDetails, setShowGroupDetails] = useState(false)
+
+  // Forms
   const [groupForm, setGroupForm] = useState({ name: '', description: '' })
   const [inviteForm, setInviteForm] = useState({ 
     group_id: '', 
@@ -31,6 +36,31 @@ export default function GroupsManagement() {
   })
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : ''
+
+  // Fetch current user admin status
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      // Check admin status by trying to access admin stats
+      await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/stats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      // If successful, user is admin
+      setCurrentUser(prev => {
+        if (!prev || prev.is_admin !== true) {
+          return { is_admin: true }
+        }
+        return prev
+      })
+    } catch {
+      // If failed, user is not admin
+      setCurrentUser(prev => {
+        if (!prev || prev.is_admin !== false) {
+          return { is_admin: false }
+        }
+        return prev
+      })
+    }
+  }, [token])
 
   // Fetch user's groups
   const fetchGroups = useCallback(async () => {
@@ -55,6 +85,7 @@ export default function GroupsManagement() {
         headers: { Authorization: `Bearer ${token}` }
       })
       setGroupDetails(res.data)
+      setShowGroupDetails(true)
     } catch (error) {
       logger.error('Error fetching group details:', error)
       setError('Failed to load group details')
@@ -81,15 +112,16 @@ export default function GroupsManagement() {
 
     const loadData = async () => {
       setLoading(true)
-      await fetchGroups()
-      if (activeTab === 'invitations') {
-        await fetchInvitations()
-      }
+      await Promise.all([
+        fetchGroups(),
+        fetchCurrentUser(),
+        activeTab === 'invitations' ? fetchInvitations() : Promise.resolve()
+      ])
       setLoading(false)
     }
 
     loadData()
-  }, [token, router, activeTab, fetchGroups, fetchInvitations])
+  }, [token, router, activeTab, fetchGroups, fetchInvitations, fetchCurrentUser])
 
   // Create group
   const handleCreateGroup = async (e) => {
@@ -193,409 +225,688 @@ export default function GroupsManagement() {
     setShowInviteModal(true)
   }
 
-  const getRoleBadgeColor = (role) => {
+  const getRoleBadgeVariant = (role) => {
     switch (role) {
-      case 'owner': return 'bg-red-100 text-red-800'
-      case 'admin': return 'bg-blue-100 text-blue-800'
-      case 'member': return 'bg-green-100 text-green-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'owner': return 'danger'
+      case 'admin': return 'primary'
+      case 'member': return 'success'
+      default: return 'secondary'
     }
   }
 
-  const getStatusBadgeColor = (status) => {
+  const getStatusBadgeVariant = (status) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800'
-      case 'accepted': return 'bg-green-100 text-green-800'
-      case 'declined': return 'bg-red-100 text-red-800'
-      case 'expired': return 'bg-gray-100 text-gray-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'pending': return 'warning'
+      case 'accepted': return 'success'
+      case 'declined': return 'danger'
+      case 'expired': return 'secondary'
+      default: return 'secondary'
     }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex justify-center items-center">
-        <div className="text-lg">Loading groups...</div>
+      <div style={{ minHeight: '100vh', backgroundColor: '#0f172a', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ 
+            width: '2rem', 
+            height: '2rem', 
+            margin: '0 auto 1rem auto',
+            border: '2px solid #334155',
+            borderTop: '2px solid #60a5fa',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }}></div>
+          <div style={{ fontSize: '1.125rem', color: '#cbd5e1' }}>Loading groups...</div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="bg-white shadow rounded-lg">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h1 className="text-2xl font-bold text-gray-900">Group Management</h1>
-              <p className="mt-1 text-sm text-gray-600">
-                Manage your groups, members, and invitations
-              </p>
+    <div style={{ minHeight: '100vh', backgroundColor: '#0f172a' }}>
+      {/* Navigation */}
+      <nav style={{ backgroundColor: '#1e293b', borderBottom: '1px solid #334155' }}>
+        <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '0 1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '4rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#f1f5f9' }}>StatusWise</h1>
             </div>
-
-            {/* Error/Success Messages */}
-            {error && (
-              <div className="mx-6 mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
-                {error}
-              </div>
-            )}
-            {success && (
-              <div className="mx-6 mt-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded">
-                {success}
-              </div>
-            )}
-
-            {/* Tabs */}
-            <div className="border-b border-gray-200">
-              <nav className="-mb-px flex px-6">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <button
+                onClick={() => router.push('/dashboard')}
+                style={{
+                  background: 'transparent',
+                  color: router.pathname === '/dashboard' ? '#60a5fa' : '#94a3b8',
+                  backgroundColor: router.pathname === '/dashboard' ? '#1e3a8a' : 'transparent',
+                  border: 'none',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  if (router.pathname !== '/dashboard') e.target.style.color = '#f1f5f9'
+                }}
+                onMouseOut={(e) => {
+                  if (router.pathname !== '/dashboard') e.target.style.color = '#94a3b8'
+                }}
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => router.push('/groups')}
+                style={{
+                  background: 'transparent',
+                  color: router.pathname === '/groups' ? '#60a5fa' : '#94a3b8',
+                  backgroundColor: router.pathname === '/groups' ? '#1e3a8a' : 'transparent',
+                  border: 'none',
+                  padding: '0.5rem 0.75rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  if (router.pathname !== '/groups') e.target.style.color = '#f1f5f9'
+                }}
+                onMouseOut={(e) => {
+                  if (router.pathname !== '/groups') e.target.style.color = '#94a3b8'
+                }}
+              >
+                Groups
+              </button>
+              {currentUser?.is_admin && (
                 <button
-                  onClick={() => setActiveTab('groups')}
-                  className={`py-2 px-4 border-b-2 font-medium text-sm ${
-                    activeTab === 'groups'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  onClick={() => router.push('/admin')}
+                  style={{
+                    background: 'transparent',
+                    color: router.pathname === '/admin' ? '#60a5fa' : '#94a3b8',
+                    backgroundColor: router.pathname === '/admin' ? '#1e3a8a' : 'transparent',
+                    border: 'none',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    transition: 'color 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    if (router.pathname !== '/admin') e.target.style.color = '#f1f5f9'
+                  }}
+                  onMouseOut={(e) => {
+                    if (router.pathname !== '/admin') e.target.style.color = '#94a3b8'
+                  }}
                 >
-                  My Groups ({groups.length})
+                  Admin
                 </button>
-                <button
-                  onClick={() => setActiveTab('invitations')}
-                  className={`ml-8 py-2 px-4 border-b-2 font-medium text-sm ${
-                    activeTab === 'invitations'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Invitations ({invitations.filter(inv => inv.status === 'pending').length})
-                </button>
-              </nav>
-            </div>
-
-            {/* Tab Content */}
-            <div className="p-6">
-              {activeTab === 'groups' && (
-                <div>
-                  {/* Create Group Button */}
-                  <div className="mb-6">
-                    <button
-                      onClick={() => setShowCreateGroup(true)}
-                      className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-                    >
-                      Create New Group
-                    </button>
-                  </div>
-
-                  {/* Groups List */}
-                  {groups.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">No groups yet. Create your first group!</p>
-                    </div>
-                  ) : (
-                    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                      {groups.map((group) => (
-                        <div key={group.id} className="bg-white border rounded-lg shadow-sm p-6">
-                          <div className="flex justify-between items-start mb-4">
-                            <h3 className="text-lg font-semibold text-gray-900">{group.name}</h3>
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleBadgeColor(group.user_role)}`}>
-                              {group.user_role?.toUpperCase()}
-                            </span>
-                          </div>
-                          
-                          {group.description && (
-                            <p className="text-gray-600 text-sm mb-4">{group.description}</p>
-                          )}
-                          
-                          <div className="flex justify-between text-sm text-gray-500 mb-4">
-                            <span>{group.members_count} members</span>
-                            <span>{group.projects_count} projects</span>
-                          </div>
-                          
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => {
-                                setSelectedGroup(group.id)
-                                fetchGroupDetails(group.id)
-                              }}
-                              className="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm px-3 py-1 rounded"
-                            >
-                              View Details
-                            </button>
-                            {(group.user_role === 'owner' || group.user_role === 'admin') && (
-                              <button
-                                onClick={() => openInviteModal(group.id)}
-                                className="bg-blue-100 hover:bg-blue-200 text-blue-800 text-sm px-3 py-1 rounded"
-                              >
-                                Invite
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               )}
-
-              {activeTab === 'invitations' && (
-                <div>
-                  <h2 className="text-lg font-semibold mb-4">Received Invitations</h2>
-                  {invitations.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">No invitations</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {invitations.map((invitation) => (
-                        <div key={invitation.id} className="border rounded-lg p-4">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-gray-900">{invitation.group_name}</h3>
-                              <p className="text-sm text-gray-600">
-                                Invited by {invitation.invited_by_name || invitation.invited_by_email}
-                              </p>
-                              <p className="text-sm text-gray-500">
-                                Role: <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleBadgeColor(invitation.role)}`}>
-                                  {invitation.role.toUpperCase()}
-                                </span>
-                              </p>
-                              {invitation.message && (
-                                <p className="text-sm text-gray-600 mt-2 italic">&quot;{invitation.message}&quot;</p>
-                              )}
-                              <p className="text-xs text-gray-500 mt-2">
-                                Sent {moment(invitation.created_at).fromNow()}
-                                {invitation.expires_at && ` • Expires ${moment(invitation.expires_at).fromNow()}`}
-                              </p>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(invitation.status)}`}>
-                                {invitation.status.toUpperCase()}
-                              </span>
-                              {invitation.status === 'pending' && (
-                                <div className="flex space-x-2">
-                                  <button
-                                    onClick={() => handleInvitationResponse(invitation.id, 'accepted')}
-                                    className="bg-green-500 hover:bg-green-700 text-white text-sm px-3 py-1 rounded"
-                                  >
-                                    Accept
-                                  </button>
-                                  <button
-                                    onClick={() => handleInvitationResponse(invitation.id, 'declined')}
-                                    className="bg-red-500 hover:bg-red-700 text-white text-sm px-3 py-1 rounded"
-                                  >
-                                    Decline
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              <button 
+                style={{
+                  backgroundColor: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#dc2626'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#ef4444'}
+                onClick={() => {
+                  localStorage.removeItem('token')
+                  router.push('/login')
+                }}
+              >
+                Logout
+              </button>
             </div>
           </div>
         </div>
+      </nav>
+
+      {/* Main Content */}
+      <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#f1f5f9', marginBottom: '0.5rem' }}>Groups</h1>
+            <p style={{ color: '#94a3b8', fontSize: '1rem' }}>
+              Manage your groups, members, and invitations
+            </p>
+          </div>
+          <div>
+            <Button
+              variant="primary"
+              onClick={() => setShowCreateGroup(true)}
+            >
+              Create Group
+            </Button>
+          </div>
+        </div>
+
+        {/* Alerts */}
+        {error && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <Alert variant="error" dismissible onDismiss={() => setError('')}>
+              {error}
+            </Alert>
+          </div>
+        )}
+        {success && (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <Alert variant="success" dismissible onDismiss={() => setSuccess('')}>
+              {success}
+            </Alert>
+          </div>
+        )}
+
+        {/* Main Content */}
+        <Card>
+          {/* Tabs */}
+          <div style={{ borderBottom: '1px solid #334155' }}>
+            <nav style={{ display: 'flex', padding: '0 1.5rem', marginBottom: '-1px' }}>
+              <button
+                onClick={() => setActiveTab('groups')}
+                style={{
+                  padding: '0.75rem 0.5rem',
+                  borderBottom: activeTab === 'groups' ? '2px solid #60a5fa' : '2px solid transparent',
+                  fontWeight: '500',
+                  fontSize: '0.875rem',
+                  color: activeTab === 'groups' ? '#60a5fa' : '#94a3b8',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                My Groups ({groups.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('invitations')}
+                style={{
+                  marginLeft: '2rem',
+                  padding: '0.75rem 0.5rem',
+                  borderBottom: activeTab === 'invitations' ? '2px solid #60a5fa' : '2px solid transparent',
+                  fontWeight: '500',
+                  fontSize: '0.875rem',
+                  color: activeTab === 'invitations' ? '#60a5fa' : '#94a3b8',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Invitations ({invitations.filter(inv => inv.status === 'pending').length})
+              </button>
+            </nav>
+          </div>
+
+          {/* Tab Content */}
+          <div style={{ padding: '1.5rem' }}>
+            {activeTab === 'groups' && (
+              <div>
+                {/* Groups Grid */}
+                {groups.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem 0' }}>
+                    <div style={{ width: '4rem', height: '4rem', backgroundColor: '#334155', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+                      <svg style={{ width: '2rem', height: '2rem', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                    <h3 style={{ fontSize: '1.125rem', fontWeight: '500', color: '#f1f5f9', marginBottom: '0.5rem' }}>No groups yet</h3>
+                    <p style={{ color: '#94a3b8', marginBottom: '1.5rem' }}>Create your first group to get started with team collaboration.</p>
+                    <Button onClick={() => setShowCreateGroup(true)}>
+                      Create Your First Group
+                    </Button>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #475569' }}>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#e2e8f0' }}>
+                            Group Name
+                          </th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#e2e8f0' }}>
+                            Description
+                          </th>
+                          <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#e2e8f0' }}>
+                            Role
+                          </th>
+                          <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#e2e8f0' }}>
+                            Members
+                          </th>
+                          <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#e2e8f0' }}>
+                            Projects
+                          </th>
+                          <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600', color: '#e2e8f0' }}>
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groups.map((group) => (
+                          <tr key={group.id} style={{ borderBottom: '1px solid #475569' }}>
+                            <td style={{ padding: '1rem 0.75rem' }}>
+                              <div style={{ fontWeight: '500', color: '#f1f5f9' }}>
+                                {group.name}
+                              </div>
+                            </td>
+                            <td style={{ padding: '1rem 0.75rem' }}>
+                              <div style={{ color: '#94a3b8', fontSize: '0.875rem', maxWidth: '200px' }}>
+                                {group.description || '—'}
+                              </div>
+                            </td>
+                            <td style={{ padding: '1rem 0.75rem', textAlign: 'center' }}>
+                              <Badge variant={getRoleBadgeVariant(group.user_role)}>
+                                {group.user_role?.toUpperCase()}
+                              </Badge>
+                            </td>
+                            <td style={{ padding: '1rem 0.75rem', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <svg 
+                                  style={{ width: '1em', height: '1em', marginRight: '0.25rem' }} 
+                                  fill="none" 
+                                  stroke="currentColor" 
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                                </svg>
+                                {group.members_count}
+                              </div>
+                            </td>
+                            <td style={{ padding: '1rem 0.75rem', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <svg 
+                                  style={{ width: '1em', height: '1em', marginRight: '0.25rem' }} 
+                                  fill="none" 
+                                  stroke="currentColor" 
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                                {group.projects_count}
+                              </div>
+                            </td>
+                            <td style={{ padding: '1rem 0.75rem', textAlign: 'right' }}>
+                              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedGroup(group.id)
+                                    fetchGroupDetails(group.id)
+                                  }}
+                                >
+                                  View Details
+                                </Button>
+                                {(group.user_role === 'owner' || group.user_role === 'admin') && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => openInviteModal(group.id)}
+                                  >
+                                    Invite
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'invitations' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h2 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#f1f5f9' }}>Received Invitations</h2>
+                </div>
+                
+                {invitations.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem 0' }}>
+                    <div style={{ 
+                      width: '4rem', 
+                      height: '4rem', 
+                      backgroundColor: '#334155', 
+                      borderRadius: '50%', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      margin: '0 auto 1rem auto' 
+                    }}>
+                      <svg style={{ width: '2rem', height: '2rem', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <h3 style={{ fontSize: '1.125rem', fontWeight: '500', color: '#f1f5f9', marginBottom: '0.5rem' }}>No invitations</h3>
+                    <p style={{ color: '#94a3b8' }}>You don&apos;t have any pending invitations at the moment.</p>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #475569' }}>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#e2e8f0' }}>
+                            Group Name
+                          </th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#e2e8f0' }}>
+                            Invited By
+                          </th>
+                          <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#e2e8f0' }}>
+                            Role
+                          </th>
+                          <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#e2e8f0' }}>
+                            Status
+                          </th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#e2e8f0' }}>
+                            Message
+                          </th>
+                          <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#e2e8f0' }}>
+                            Date
+                          </th>
+                          <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600', color: '#e2e8f0' }}>
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invitations.map((invitation) => (
+                          <tr key={invitation.id} style={{ borderBottom: '1px solid #475569' }}>
+                            <td style={{ padding: '1rem 0.75rem' }}>
+                              <div style={{ fontWeight: '500', color: '#f1f5f9' }}>
+                                {invitation.group_name}
+                              </div>
+                            </td>
+                            <td style={{ padding: '1rem 0.75rem' }}>
+                              <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
+                                {invitation.invited_by_name || invitation.invited_by_email}
+                              </div>
+                            </td>
+                            <td style={{ padding: '1rem 0.75rem', textAlign: 'center' }}>
+                              <Badge variant={getRoleBadgeVariant(invitation.role)} size="sm">
+                                {invitation.role.toUpperCase()}
+                              </Badge>
+                            </td>
+                            <td style={{ padding: '1rem 0.75rem', textAlign: 'center' }}>
+                              <Badge variant={getStatusBadgeVariant(invitation.status)}>
+                                {invitation.status.toUpperCase()}
+                              </Badge>
+                            </td>
+                            <td style={{ padding: '1rem 0.75rem' }}>
+                              <div style={{ fontSize: '0.875rem', color: '#94a3b8', fontStyle: 'italic', maxWidth: '200px' }}>
+                                {invitation.message ? `"${invitation.message}"` : '—'}
+                              </div>
+                            </td>
+                            <td style={{ padding: '1rem 0.75rem', textAlign: 'center' }}>
+                              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                {moment(invitation.created_at).fromNow()}
+                                {invitation.expires_at && (
+                                  <div>Expires {moment(invitation.expires_at).fromNow()}</div>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ padding: '1rem 0.75rem', textAlign: 'right' }}>
+                              {invitation.status === 'pending' ? (
+                                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                  <Button
+                                    variant="success"
+                                    size="sm"
+                                    onClick={() => handleInvitationResponse(invitation.id, 'accepted')}
+                                  >
+                                    Accept
+                                  </Button>
+                                  <Button
+                                    variant="danger"
+                                    size="sm"
+                                    onClick={() => handleInvitationResponse(invitation.id, 'declined')}
+                                  >
+                                    Decline
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span style={{ color: '#94a3b8', fontSize: '0.875rem' }}>—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </Card>
       </div>
 
       {/* Create Group Modal */}
-      {showCreateGroup && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Create New Group</h3>
-              <form onSubmit={handleCreateGroup}>
-                <div className="mb-4">
-                  <label htmlFor="group-name" className="block text-gray-700 text-sm font-bold mb-2">
-                    Group Name *
-                  </label>
-                  <input
-                    id="group-name"
-                    type="text"
-                    required
-                    value={groupForm.name}
-                    onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
-                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                  />
-                </div>
-                <div className="mb-4">
-                  <label htmlFor="group-description" className="block text-gray-700 text-sm font-bold mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    id="group-description"
-                    value={groupForm.description}
-                    onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })}
-                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                    rows="3"
-                  />
-                </div>
-                <div className="flex justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateGroup(false)}
-                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-                  >
-                    Create Group
-                  </button>
-                </div>
-              </form>
+      <Modal 
+        isOpen={showCreateGroup} 
+        onClose={() => setShowCreateGroup(false)}
+        size="md"
+      >
+        <Modal.Header onClose={() => setShowCreateGroup(false)}>
+          Create New Group
+        </Modal.Header>
+        <form onSubmit={handleCreateGroup}>
+          <Modal.Body>
+            <div className="space-y-4">
+              <Input
+                label="Group Name"
+                type="text"
+                required
+                value={groupForm.name}
+                onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
+                placeholder="Enter group name"
+              />
+              <div>
+                <label className="form-label">Description</label>
+                <textarea
+                  value={groupForm.description}
+                  onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })}
+                  className="form-input"
+                  rows="3"
+                  placeholder="Enter group description (optional)"
+                />
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreateGroup(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary">
+              Create Group
+            </Button>
+          </Modal.Footer>
+        </form>
+      </Modal>
 
       {/* Invite Modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Send Invitation</h3>
-              <form onSubmit={handleSendInvitation}>
-                <div className="mb-4">
-                  <label htmlFor="invite-email" className="block text-gray-700 text-sm font-bold mb-2">
-                    Email Address *
-                  </label>
-                  <input
-                    id="invite-email"
-                    type="email"
-                    required
-                    value={inviteForm.invited_email}
-                    onChange={(e) => setInviteForm({ ...inviteForm, invited_email: e.target.value })}
-                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                  />
-                </div>
-                <div className="mb-4">
-                  <label htmlFor="invite-role" className="block text-gray-700 text-sm font-bold mb-2">
-                    Role
-                  </label>
-                  <select
-                    id="invite-role"
-                    value={inviteForm.role}
-                    onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
-                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                  >
-                    <option value="member">Member</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-                <div className="mb-4">
-                  <label htmlFor="invite-message" className="block text-gray-700 text-sm font-bold mb-2">
-                    Message (Optional)
-                  </label>
-                  <textarea
-                    id="invite-message"
-                    value={inviteForm.message}
-                    onChange={(e) => setInviteForm({ ...inviteForm, message: e.target.value })}
-                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                    rows="2"
-                    placeholder="Add a personal message..."
-                  />
-                </div>
-                <div className="flex justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowInviteModal(false)}
-                    className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-                  >
-                    Send Invitation
-                  </button>
-                </div>
-              </form>
+      <Modal 
+        isOpen={showInviteModal} 
+        onClose={() => setShowInviteModal(false)}
+        size="md"
+      >
+        <Modal.Header onClose={() => setShowInviteModal(false)}>
+          Send Invitation
+        </Modal.Header>
+        <form onSubmit={handleSendInvitation}>
+          <Modal.Body>
+            <div className="space-y-4">
+              <Input
+                label="Email Address"
+                type="email"
+                required
+                value={inviteForm.invited_email}
+                onChange={(e) => setInviteForm({ ...inviteForm, invited_email: e.target.value })}
+                placeholder="Enter email address"
+              />
+              <div>
+                <label className="form-label">Role</label>
+                <select
+                  value={inviteForm.role}
+                  onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
+                  className="form-input"
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="form-label">Message (Optional)</label>
+                <textarea
+                  value={inviteForm.message}
+                  onChange={(e) => setInviteForm({ ...inviteForm, message: e.target.value })}
+                  className="form-input"
+                  rows="2"
+                  placeholder="Add a personal message..."
+                />
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => setShowInviteModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary">
+              Send Invitation
+            </Button>
+          </Modal.Footer>
+        </form>
+      </Modal>
 
       {/* Group Details Modal */}
-      {selectedGroup && groupDetails && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-4/5 max-w-4xl shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">{groupDetails.name}</h3>
-                <button
-                  onClick={() => {
-                    setSelectedGroup(null)
-                    setGroupDetails(null)
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                  </svg>
-                </button>
-              </div>
-              
+      <Modal 
+        isOpen={showGroupDetails && groupDetails} 
+        onClose={() => {
+          setShowGroupDetails(false)
+          setSelectedGroup(null)
+          setGroupDetails(null)
+        }}
+        size="4xl"
+      >
+        <Modal.Header onClose={() => {
+          setShowGroupDetails(false)
+          setSelectedGroup(null)
+          setGroupDetails(null)
+        }}>
+          {groupDetails?.name}
+        </Modal.Header>
+        <Modal.Body>
+          {groupDetails && (
+            <div className="space-y-6">
               {groupDetails.description && (
-                <p className="text-gray-600 mb-4">{groupDetails.description}</p>
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-2">Description</h4>
+                  <p className="text-gray-600">{groupDetails.description}</p>
+                </div>
               )}
               
-              <div className="mb-6">
-                <h4 className="text-md font-semibold mb-3">Members ({groupDetails.members_count})</h4>
-                <div className="space-y-2">
-                  {groupDetails.members?.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between p-3 border rounded">
-                      <div className="flex items-center space-x-3">
-                        {member.user_avatar_url && (
-                          <img 
-                            src={member.user_avatar_url} 
-                            alt={member.user_name}
-                            className="w-8 h-8 rounded-full"
-                          />
-                        )}
-                        <div>
-                          <p className="font-medium">{member.user_name || member.user_email}</p>
-                          <p className="text-sm text-gray-500">{member.user_email}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleBadgeColor(member.role)}`}>
-                          {member.role.toUpperCase()}
-                        </span>
-                        {(groupDetails.owner_id === groupDetails.id || member.role !== 'owner') && (
-                          <div className="flex space-x-1">
-                            <select
-                              value={member.role}
-                              onChange={(e) => handleUpdateMemberRole(member.id, e.target.value)}
-                              className="text-xs border rounded px-2 py-1"
-                            >
-                              <option value="member">Member</option>
-                              <option value="admin">Admin</option>
-                              {groupDetails.owner_id === groupDetails.id && (
-                                <option value="owner">Owner</option>
+              <div>
+                <h4 className="font-medium text-gray-900 mb-4">
+                  Members ({groupDetails.members_count})
+                </h4>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#374151' }}>
+                          Member
+                        </th>
+                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151' }}>
+                          Role
+                        </th>
+                        <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '600', color: '#374151' }}>
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupDetails.members?.map((member) => (
+                        <tr key={member.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                          <td style={{ padding: '1rem 0.75rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              {member.user_avatar_url && (
+                                <img 
+                                  src={member.user_avatar_url} 
+                                  alt={member.user_name}
+                                  style={{ width: '2.5rem', height: '2.5rem', borderRadius: '50%' }}
+                                />
                               )}
-                            </select>
-                            <button
-                              onClick={() => handleRemoveMember(member.id)}
-                              className="text-red-600 hover:text-red-800 text-xs"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                              <div>
+                                <div style={{ fontWeight: '500', color: '#111827' }}>
+                                  {member.user_name || member.user_email}
+                                </div>
+                                <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                                  {member.user_email}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ padding: '1rem 0.75rem', textAlign: 'center' }}>
+                            <Badge variant={getRoleBadgeVariant(member.role)}>
+                              {member.role.toUpperCase()}
+                            </Badge>
+                          </td>
+                          <td style={{ padding: '1rem 0.75rem', textAlign: 'right' }}>
+                            {(groupDetails.owner_id === groupDetails.id || member.role !== 'owner') ? (
+                              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                <select
+                                  value={member.role}
+                                  onChange={(e) => handleUpdateMemberRole(member.id, e.target.value)}
+                                  style={{ 
+                                    fontSize: '0.875rem', 
+                                    border: '1px solid #d1d5db', 
+                                    borderRadius: '0.25rem', 
+                                    padding: '0.25rem 0.5rem',
+                                    backgroundColor: 'white'
+                                  }}
+                                >
+                                  <option value="member">Member</option>
+                                  <option value="admin">Admin</option>
+                                  {groupDetails.owner_id === groupDetails.id && (
+                                    <option value="owner">Owner</option>
+                                  )}
+                                </select>
+                                <Button
+                                  variant="danger"
+                                  size="sm"
+                                  onClick={() => handleRemoveMember(member.id)}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+                            ) : (
+                              <span style={{ color: '#9ca3af', fontSize: '0.875rem' }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
+        </Modal.Body>
+      </Modal>
     </div>
   )
 } 
