@@ -174,11 +174,31 @@ class LemonSqueezyService:
         except Exception:
             return False
 
+    _processed_event_cache: dict[str, float] = {}
+
+    @staticmethod
+    def _is_event_processed(event_id: str) -> bool:
+        # Simple in-memory idempotency cache (process lifetime). For production, use Redis.
+        return event_id in LemonSqueezyService._processed_event_cache
+
+    @staticmethod
+    def _mark_event_processed(event_id: str):
+        LemonSqueezyService._processed_event_cache[event_id] = datetime.utcnow().timestamp()
+
     @staticmethod
     def handle_webhook(event_data: Dict[str, Any], db: Session) -> bool:
         """Handle webhook events from Lemon Squeezy"""
         try:
             event_name = event_data.get("meta", {}).get("event_name")
+            event_id = str(event_data.get("meta", {}).get("event_id"))
+
+            # Basic structured logging context
+            log_ctx = {"event_name": event_name, "event_id": event_id}
+
+            # Idempotency check
+            if event_id and LemonSqueezyService._is_event_processed(event_id):
+                print({"level": "info", "message": "duplicate_event", **log_ctx})
+                return True
             data = event_data.get("data", {})
 
             if not data or not event_name:
@@ -218,9 +238,13 @@ class LemonSqueezyService:
             elif event_name == "subscription_expired":
                 return LemonSqueezyService._handle_subscription_expired(user, data, db)
 
+            # Mark processed on success path
+            if event_id:
+                LemonSqueezyService._mark_event_processed(event_id)
+            print({"level": "info", "message": "webhook_processed", **log_ctx})
             return True
         except Exception as e:
-            print(f"Webhook handling error: {str(e)}")
+            print({"level": "error", "message": "webhook_error", "error": str(e)})
             return False
 
     @staticmethod

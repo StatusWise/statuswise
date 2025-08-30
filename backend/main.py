@@ -553,7 +553,11 @@ def create_project(
 
 @app.get("/projects/", response_model=list[schemas.ProjectOut], tags=["projects"])
 def list_projects(
-    db: Session = Depends(get_db), user: models.User = Depends(auth.get_current_user)
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user),
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of records to return"),
+    sort_desc: bool = Query(True, description="Sort by newest first"),
 ):
     """
     List all projects owned by the current user.
@@ -562,7 +566,12 @@ def list_projects(
 
     Requires authentication.
     """
-    return db.query(models.Project).filter(models.Project.owner_id == user.id).all()
+    query = db.query(models.Project).filter(models.Project.owner_id == user.id)
+    if sort_desc:
+        query = query.order_by(models.Project.id.desc())
+    else:
+        query = query.order_by(models.Project.id.asc())
+    return query.offset(skip).limit(limit).all()
 
 
 @app.patch(
@@ -723,7 +732,14 @@ def resolve_incident(
 @app.get(
     "/public/{project_id}", response_model=list[schemas.IncidentOut], tags=["public"]
 )
-def public_incidents(project_id: int, db: Session = Depends(get_db)):
+def public_incidents(
+    project_id: int,
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of records to return"),
+    only_unresolved: bool = Query(False, description="Return only unresolved incidents"),
+    sort_desc: bool = Query(True, description="Sort by newest first"),
+):
     """
     Get public incidents for a project status page.
 
@@ -743,9 +759,14 @@ def public_incidents(project_id: int, db: Session = Depends(get_db)):
     if not project.is_public:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return (
-        db.query(models.Incident).filter(models.Incident.project_id == project_id).all()
-    )
+    query = db.query(models.Incident).filter(models.Incident.project_id == project_id)
+    if only_unresolved:
+        query = query.filter(models.Incident.resolved.is_(False))
+    if sort_desc:
+        query = query.order_by(models.Incident.created_at.desc())
+    else:
+        query = query.order_by(models.Incident.created_at.asc())
+    return query.offset(skip).limit(limit).all()
 
 
 @app.get(
@@ -961,6 +982,17 @@ def remove_group_member(
     return {"message": "Member removed successfully"}
 
 
+@app.delete("/groups/{group_id}/members/me", tags=["groups"])
+def leave_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user),
+):
+    """Leave a group (non-owners only)."""
+    GroupService.leave_group(group_id, user, db)
+    return {"message": "Left group successfully"}
+
+
 # Group Invitation Management
 
 
@@ -1013,6 +1045,40 @@ def get_user_invitations(
     Returns a list of invitations for the current user.
     """
     return GroupService.get_user_invitations(user, db, status)
+
+
+@app.post(
+    "/invitations/accept",
+    response_model=schemas.GroupInvitationOut,
+    tags=["groups"],
+)
+def accept_invitation_by_token(
+    payload: schemas.InvitationTokenRequest,
+    db: Session = Depends(get_db),
+):
+    """Accept an invitation using a token (email-only flows)."""
+    return GroupService.respond_to_invitation_by_token(
+        payload.token,
+        schemas.GroupInvitationUpdate(status=schemas.InvitationStatus.ACCEPTED),
+        db,
+    )
+
+
+@app.post(
+    "/invitations/decline",
+    response_model=schemas.GroupInvitationOut,
+    tags=["groups"],
+)
+def decline_invitation_by_token(
+    payload: schemas.InvitationTokenRequest,
+    db: Session = Depends(get_db),
+):
+    """Decline an invitation using a token (email-only flows)."""
+    return GroupService.respond_to_invitation_by_token(
+        payload.token,
+        schemas.GroupInvitationUpdate(status=schemas.InvitationStatus.DECLINED),
+        db,
+    )
 
 
 @app.patch(

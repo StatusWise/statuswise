@@ -318,6 +318,10 @@ class GroupInvitationUpdate(BaseModel):
         return v
 
 
+class InvitationTokenRequest(BaseModel):
+    token: str = Field(..., min_length=8, description="Invitation token")
+
+
 class GroupInvitationOut(BaseModel):
     id: int
     group_id: int
