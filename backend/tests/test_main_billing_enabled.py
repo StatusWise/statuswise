@@ -104,6 +104,34 @@ class TestBillingEnabledEndpoints:
         # Should return validation error but not 503 (service unavailable)
         assert response.status_code != 503
 
+    def test_portal_endpoint_creates_session(self):
+        """Test that portal endpoint returns a portal URL when billing is enabled."""
+        db = TestingSessionLocal()
+        user = create_test_user(email="portal@example.com")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        # Ensure a customer id to skip external calls; mimic creation
+        user.lemonsqueezy_customer_id = "cust_123"
+        db.commit()
+
+        token = create_access_token({"sub": user.email})
+
+        # Mock the service call to avoid external dependency
+        from unittest.mock import patch
+        with patch("lemonsqueezy_service.LemonSqueezyService.create_portal_url", return_value="https://portal.example.com"):
+            response = client.post(
+                "/subscription/portal",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert "portal_url" in data
+            assert data["portal_url"].startswith("http")
+
+        db.close()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

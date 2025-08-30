@@ -69,6 +69,25 @@ class TestAdditionalEndpoints:
             422,
         ]  # Invalid token, but endpoint exists
 
+    def test_admin_endpoints_return_404_when_disabled(self):
+        """Admin endpoints should be hidden (404) when admin is disabled."""
+        # Ensure admin disabled for this test process
+        os.environ["ENABLE_ADMIN"] = "false"
+
+        # Even with a valid admin token, route should be 404 when disabled
+        db = TestingSessionLocal()
+        user = create_test_user(email="admin@example.com", is_admin=True)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        token = create_access_token({"sub": user.email})
+
+        response = client.get("/admin/stats", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 404
+
+        db.close()
+
     def test_protected_endpoint_requires_auth(self):
         """Test that protected endpoints require authentication."""
         response = client.get("/projects/")
@@ -92,6 +111,47 @@ class TestAdditionalEndpoints:
             "/projects/", headers={"Authorization": f"Bearer {token}"}
         )
         assert response.status_code == 200
+
+        db.close()
+
+    def test_me_endpoint_returns_current_user(self):
+        """Test that /me returns the authenticated user's profile."""
+        db = TestingSessionLocal()
+
+        # Create user
+        user = create_test_user(email="me@example.com")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        # Create token
+        token = create_access_token({"sub": user.email})
+
+        # Call /me
+        response = client.get("/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == "me@example.com"
+        assert "id" in data
+
+        db.close()
+
+    def test_expired_token_returns_unauthorized(self):
+        """Test that an expired token yields 401 on protected endpoints."""
+        db = TestingSessionLocal()
+
+        # Create user
+        user = create_test_user(email="expired@example.com")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        # Create already expired token
+        token = create_access_token({"sub": user.email}, expires_in_seconds=-5)
+
+        # Call a protected route
+        response = client.get("/projects/", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 401
 
         db.close()
 

@@ -121,6 +121,44 @@ class LemonSqueezyService:
             return None
 
     @staticmethod
+    def create_portal_url(customer_id: str, return_url: Optional[str] = None) -> Optional[str]:
+        """Create a customer billing portal URL.
+
+        Note: Lemon Squeezy's API evolves; this implementation attempts a reasonable
+        POST to create a portal session. Tests should mock this method.
+        """
+        try:
+            # Hypothetical endpoint for creating a portal session
+            data = {
+                "data": {
+                    "type": "customer_portal_sessions",
+                    "attributes": {
+                        "customer_id": customer_id,
+                        "return_url": return_url,
+                    },
+                    "relationships": {
+                        "store": {"data": {"type": "stores", "id": LEMONSQUEEZY_STORE_ID}},
+                    },
+                }
+            }
+
+            response = requests.post(
+                f"{LEMONSQUEEZY_API_URL}/customer-portal/sessions",
+                json=data,
+                headers=LemonSqueezyService._get_headers(),
+            )
+
+            if response.status_code in (200, 201):
+                # Expected payload form: { data: { attributes: { url: "..." } } }
+                return response.json().get("data", {}).get("attributes", {}).get("url")
+            else:
+                print(f"Failed to create portal session: {response.text}")
+                return None
+        except Exception as e:
+            print(f"Error creating portal session: {str(e)}")
+            return None
+
+    @staticmethod
     def verify_webhook_signature(payload: bytes, signature: str) -> bool:
         """Verify Lemon Squeezy webhook signature"""
         try:
@@ -136,11 +174,31 @@ class LemonSqueezyService:
         except Exception:
             return False
 
+    _processed_event_cache: dict[str, float] = {}
+
+    @staticmethod
+    def _is_event_processed(event_id: str) -> bool:
+        # Simple in-memory idempotency cache (process lifetime). For production, use Redis.
+        return event_id in LemonSqueezyService._processed_event_cache
+
+    @staticmethod
+    def _mark_event_processed(event_id: str):
+        LemonSqueezyService._processed_event_cache[event_id] = datetime.utcnow().timestamp()
+
     @staticmethod
     def handle_webhook(event_data: Dict[str, Any], db: Session) -> bool:
         """Handle webhook events from Lemon Squeezy"""
         try:
             event_name = event_data.get("meta", {}).get("event_name")
+            event_id = str(event_data.get("meta", {}).get("event_id"))
+
+            # Basic structured logging context
+            log_ctx = {"event_name": event_name, "event_id": event_id}
+
+            # Idempotency check
+            if event_id and LemonSqueezyService._is_event_processed(event_id):
+                print({"level": "info", "message": "duplicate_event", **log_ctx})
+                return True
             data = event_data.get("data", {})
 
             if not data or not event_name:
@@ -180,9 +238,13 @@ class LemonSqueezyService:
             elif event_name == "subscription_expired":
                 return LemonSqueezyService._handle_subscription_expired(user, data, db)
 
+            # Mark processed on success path
+            if event_id:
+                LemonSqueezyService._mark_event_processed(event_id)
+            print({"level": "info", "message": "webhook_processed", **log_ctx})
             return True
         except Exception as e:
-            print(f"Webhook handling error: {str(e)}")
+            print({"level": "error", "message": "webhook_error", "error": str(e)})
             return False
 
     @staticmethod

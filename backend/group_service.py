@@ -442,6 +442,101 @@ class GroupService:
         return invitation
 
     @staticmethod
+    def respond_to_invitation_by_token(
+        token: str, response: schemas.GroupInvitationUpdate, db: Session
+    ) -> models.GroupInvitation:
+        """Respond to an invitation using a one-time token (email-only flows)."""
+        invitation = (
+            db.query(models.GroupInvitation)
+            .filter(
+                and_(
+                    models.GroupInvitation.invitation_token == token,
+                    models.GroupInvitation.status == models.InvitationStatus.PENDING,
+                )
+            )
+            .first()
+        )
+
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invitation not found or already responded",
+            )
+
+        # Expiry check
+        current_time = datetime.datetime.now(datetime.timezone.utc)
+        expires_at = invitation.expires_at
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        if expires_at and expires_at < current_time:
+            invitation.status = models.InvitationStatus.EXPIRED
+            db.commit()
+            raise HTTPException(status_code=400, detail="Invitation has expired")
+
+        # If accepted, try to find or create user by email
+        if response.status == models.InvitationStatus.ACCEPTED:
+            invited_email = invitation.invited_email
+            if not invited_email:
+                raise HTTPException(status_code=400, detail="Invitation missing email")
+            invited_user = get_user_by_email(invited_email, db)
+            if not invited_user:
+                # Minimal user creation for acceptance; remaining profile can be completed later
+                invited_user = models.User(email=invited_email, is_active=True)
+                db.add(invited_user)
+                db.flush()
+
+            # Ensure membership exists
+            existing_membership = (
+                db.query(models.GroupMember)
+                .filter(
+                    and_(
+                        models.GroupMember.group_id == invitation.group_id,
+                        models.GroupMember.user_id == invited_user.id,
+                        models.GroupMember.is_active,
+                    )
+                )
+                .first()
+            )
+            if not existing_membership:
+                membership = models.GroupMember(
+                    group_id=invitation.group_id,
+                    user_id=invited_user.id,
+                    role=invitation.role,
+                )
+                db.add(membership)
+
+        invitation.status = response.status
+        invitation.responded_at = datetime.datetime.now(datetime.timezone.utc)
+        db.commit()
+        db.refresh(invitation)
+        return invitation
+
+    @staticmethod
+    def leave_group(group_id: int, user: models.User, db: Session) -> bool:
+        """Allow a member to leave a group; owners cannot leave their own group."""
+        membership = (
+            db.query(models.GroupMember)
+            .filter(
+                and_(
+                    models.GroupMember.group_id == group_id,
+                    models.GroupMember.user_id == user.id,
+                    models.GroupMember.is_active,
+                )
+            )
+            .first()
+        )
+        if not membership:
+            raise HTTPException(status_code=404, detail="Membership not found")
+        if membership.role == models.GroupRole.OWNER:
+            raise HTTPException(
+                status_code=400, detail="Owner cannot leave the group. Transfer ownership first."
+            )
+        membership.is_active = False
+        membership.updated_at = datetime.datetime.now(datetime.timezone.utc)
+        db.commit()
+        return True
+
+    @staticmethod
     def get_user_invitations(
         user: models.User,
         db: Session,

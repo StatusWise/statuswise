@@ -45,10 +45,10 @@ app = FastAPI(
     Use the `/config` endpoint to check which features are currently enabled.
     
     ## Authentication
-    
-    This API uses OAuth2 with Bearer tokens. To authenticate:
-    1. Register a new account via `/signup`
-    2. Login via `/login` to get an access token
+
+    This API uses OAuth2 Bearer tokens issued via Google OAuth.
+    1. Frontend obtains a Google ID token
+    2. Exchange it at `/auth/google` to receive a JWT access token
     3. Include the token in the Authorization header: `Bearer {token}`
     
     ## Subscription Tiers
@@ -124,9 +124,11 @@ app = FastAPI(
     ],
 )
 
+# Restrictive CORS: allow frontend origin if provided, otherwise fallback to dev defaults
+allowed_origins = [config.FRONTEND_URL] if config.FRONTEND_URL else ["http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -159,6 +161,15 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def require_admin_feature_enabled():
+    """Dependency that ensures admin features are enabled."""
+    if not config.ENABLE_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Admin functionality is disabled",
+        )
 
 
 @app.post("/auth/google", response_model=schemas.AuthResponse, tags=["authentication"])
@@ -215,6 +226,17 @@ def google_auth(auth_request: schemas.GoogleAuthRequest, db: Session = Depends(g
         )
 
 
+@app.get("/me", response_model=schemas.UserOut, tags=["authentication"])
+def get_me(current_user: models.User = Depends(auth.get_current_user)):
+    """
+    Get the currently authenticated user's profile.
+
+    Returns the authenticated user's basic information.
+    Requires a valid Bearer token.
+    """
+    return current_user
+
+
 @app.get("/", tags=["health"])
 def read_root():
     """
@@ -260,6 +282,7 @@ def get_config():
             "subscription_management": config.is_billing_enabled(),
             "billing_webhooks": config.is_billing_enabled(),
             "subscription_limits": config.is_billing_enabled(),
+            "admin_enabled": config.ENABLE_ADMIN,
         },
     }
 
@@ -385,6 +408,33 @@ if config.is_billing_enabled():
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
+    @app.post(
+        "/subscription/portal",
+        response_model=schemas.PortalSessionResponse,
+        tags=["subscription"],
+    )
+    def create_portal_session(
+        user: models.User = Depends(auth.get_current_user),
+        db: Session = Depends(get_db),
+    ):
+        """
+        Create a billing portal session for the authenticated user.
+        """
+        if not user.lemonsqueezy_customer_id:
+            # Best-effort auto-create a customer record
+            customer_id = LemonSqueezyService.create_customer(user.email, user.name or "")
+            if not customer_id:
+                raise HTTPException(status_code=500, detail="Unable to create customer")
+            user.lemonsqueezy_customer_id = customer_id
+            db.commit()
+
+        portal_url = LemonSqueezyService.create_portal_url(
+            user.lemonsqueezy_customer_id, return_url=f"{config.FRONTEND_URL}/dashboard"
+        )
+        if not portal_url:
+            raise HTTPException(status_code=500, detail="Unable to create portal session")
+        return {"portal_url": portal_url}
+
 else:
 
     @app.post(
@@ -503,7 +553,11 @@ def create_project(
 
 @app.get("/projects/", response_model=list[schemas.ProjectOut], tags=["projects"])
 def list_projects(
-    db: Session = Depends(get_db), user: models.User = Depends(auth.get_current_user)
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user),
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of records to return"),
+    sort_desc: bool = Query(True, description="Sort by newest first"),
 ):
     """
     List all projects owned by the current user.
@@ -512,7 +566,12 @@ def list_projects(
 
     Requires authentication.
     """
-    return db.query(models.Project).filter(models.Project.owner_id == user.id).all()
+    query = db.query(models.Project).filter(models.Project.owner_id == user.id)
+    if sort_desc:
+        query = query.order_by(models.Project.id.desc())
+    else:
+        query = query.order_by(models.Project.id.asc())
+    return query.offset(skip).limit(limit).all()
 
 
 @app.patch(
@@ -608,6 +667,9 @@ def list_incidents(
     project_id: int,
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user),
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of records to return"),
+    sort_desc: bool = Query(True, description="Sort by newest first"),
 ):
     """
     List all incidents for a specific project.
@@ -622,9 +684,12 @@ def list_incidents(
     # Check if user has access to the project
     require_project_access(user, project_id, "read", db)
 
-    return (
-        db.query(models.Incident).filter(models.Incident.project_id == project_id).all()
-    )
+    query = db.query(models.Incident).filter(models.Incident.project_id == project_id)
+    if sort_desc:
+        query = query.order_by(models.Incident.created_at.desc())
+    else:
+        query = query.order_by(models.Incident.created_at.asc())
+    return query.offset(skip).limit(limit).all()
 
 
 @app.post(
@@ -667,7 +732,14 @@ def resolve_incident(
 @app.get(
     "/public/{project_id}", response_model=list[schemas.IncidentOut], tags=["public"]
 )
-def public_incidents(project_id: int, db: Session = Depends(get_db)):
+def public_incidents(
+    project_id: int,
+    db: Session = Depends(get_db),
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of records to return"),
+    only_unresolved: bool = Query(False, description="Return only unresolved incidents"),
+    sort_desc: bool = Query(True, description="Sort by newest first"),
+):
     """
     Get public incidents for a project status page.
 
@@ -687,9 +759,14 @@ def public_incidents(project_id: int, db: Session = Depends(get_db)):
     if not project.is_public:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    return (
-        db.query(models.Incident).filter(models.Incident.project_id == project_id).all()
-    )
+    query = db.query(models.Incident).filter(models.Incident.project_id == project_id)
+    if only_unresolved:
+        query = query.filter(models.Incident.resolved.is_(False))
+    if sort_desc:
+        query = query.order_by(models.Incident.created_at.desc())
+    else:
+        query = query.order_by(models.Incident.created_at.asc())
+    return query.offset(skip).limit(limit).all()
 
 
 @app.get(
@@ -701,6 +778,9 @@ def list_project_incidents(
     project_id: int,
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user),
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of records to return"),
+    sort_desc: bool = Query(True, description="Sort by newest first"),
 ):
     """
     Get all incidents for a specific project.
@@ -716,14 +796,12 @@ def list_project_incidents(
     """
     require_project_access(user, project_id, "read", db)
 
-    incidents = (
-        db.query(models.Incident)
-        .filter(models.Incident.project_id == project_id)
-        .order_by(models.Incident.created_at.desc())
-        .all()
-    )
-
-    return incidents
+    query = db.query(models.Incident).filter(models.Incident.project_id == project_id)
+    if sort_desc:
+        query = query.order_by(models.Incident.created_at.desc())
+    else:
+        query = query.order_by(models.Incident.created_at.asc())
+    return query.offset(skip).limit(limit).all()
 
 
 # Group Management Endpoints
@@ -850,6 +928,17 @@ def delete_group(
 # Group Member Management
 
 
+@app.delete("/groups/{group_id}/members/me", tags=["groups"])
+def leave_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user),
+):
+    """Leave a group (non-owners only)."""
+    GroupService.leave_group(group_id, user, db)
+    return {"message": "Left group successfully"}
+
+
 @app.patch(
     "/groups/{group_id}/members/{member_id}",
     response_model=schemas.GroupMemberOut,
@@ -902,6 +991,17 @@ def remove_group_member(
     """
     GroupService.remove_member(group_id, member_id, user, db)
     return {"message": "Member removed successfully"}
+
+
+@app.delete("/groups/{group_id}/members/me", tags=["groups"])
+def leave_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user),
+):
+    """Leave a group (non-owners only)."""
+    GroupService.leave_group(group_id, user, db)
+    return {"message": "Left group successfully"}
 
 
 # Group Invitation Management
@@ -958,6 +1058,40 @@ def get_user_invitations(
     return GroupService.get_user_invitations(user, db, status)
 
 
+@app.post(
+    "/invitations/accept",
+    response_model=schemas.GroupInvitationOut,
+    tags=["groups"],
+)
+def accept_invitation_by_token(
+    payload: schemas.InvitationTokenRequest,
+    db: Session = Depends(get_db),
+):
+    """Accept an invitation using a token (email-only flows)."""
+    return GroupService.respond_to_invitation_by_token(
+        payload.token,
+        schemas.GroupInvitationUpdate(status=schemas.InvitationStatus.ACCEPTED),
+        db,
+    )
+
+
+@app.post(
+    "/invitations/decline",
+    response_model=schemas.GroupInvitationOut,
+    tags=["groups"],
+)
+def decline_invitation_by_token(
+    payload: schemas.InvitationTokenRequest,
+    db: Session = Depends(get_db),
+):
+    """Decline an invitation using a token (email-only flows)."""
+    return GroupService.respond_to_invitation_by_token(
+        payload.token,
+        schemas.GroupInvitationUpdate(status=schemas.InvitationStatus.DECLINED),
+        db,
+    )
+
+
 @app.patch(
     "/invitations/{invitation_id}",
     response_model=schemas.GroupInvitationOut,
@@ -993,6 +1127,7 @@ def respond_to_group_invitation(
 def get_admin_stats(
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get system-wide statistics for admin dashboard.
@@ -1045,6 +1180,7 @@ def get_admin_users(
     limit: int = Query(100, ge=1, description="Maximum number of records to return"),
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all users for admin management.
@@ -1078,6 +1214,7 @@ def get_admin_subscriptions(
     limit: int = Query(100, ge=1, description="Maximum number of records to return"),
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all subscriptions for admin management.
@@ -1119,6 +1256,7 @@ def get_admin_projects(
     limit: int = Query(100, ge=1, description="Maximum number of records to return"),
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all projects for admin management.
@@ -1171,6 +1309,7 @@ def get_admin_user(
     user_id: int = Path(..., gt=0, description="ID of the user to retrieve"),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get detailed information about a specific user.
@@ -1202,6 +1341,7 @@ def update_admin_user(
     is_admin: Optional[bool] = None,
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Update user administrative settings.
@@ -1252,6 +1392,7 @@ def get_admin_incidents(
     resolved: Optional[bool] = None,
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all incidents for admin oversight.
@@ -1288,6 +1429,7 @@ def get_admin_incidents(
 def get_admin_group_stats(
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get group management statistics for admin dashboard.
@@ -1308,6 +1450,7 @@ def get_admin_groups(
     include_inactive: bool = Query(False, description="Include inactive groups"),
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all groups for admin oversight.
@@ -1391,6 +1534,7 @@ def get_admin_invitations(
     ),
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all group invitations for admin oversight.
