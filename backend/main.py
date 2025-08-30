@@ -215,6 +215,17 @@ def google_auth(auth_request: schemas.GoogleAuthRequest, db: Session = Depends(g
         )
 
 
+@app.get("/me", response_model=schemas.UserOut, tags=["authentication"])
+def get_me(current_user: models.User = Depends(auth.get_current_user)):
+    """
+    Get the currently authenticated user's profile.
+
+    Returns the authenticated user's basic information.
+    Requires a valid Bearer token.
+    """
+    return current_user
+
+
 @app.get("/", tags=["health"])
 def read_root():
     """

@@ -95,6 +95,28 @@ class TestAdditionalEndpoints:
 
         db.close()
 
+    def test_me_endpoint_returns_current_user(self):
+        """Test that /me returns the authenticated user's profile."""
+        db = TestingSessionLocal()
+
+        # Create user
+        user = create_test_user(email="me@example.com")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        # Create token
+        token = create_access_token({"sub": user.email})
+
+        # Call /me
+        response = client.get("/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == "me@example.com"
+        assert "id" in data
+
+        db.close()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
