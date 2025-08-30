@@ -45,10 +45,10 @@ app = FastAPI(
     Use the `/config` endpoint to check which features are currently enabled.
     
     ## Authentication
-    
-    This API uses OAuth2 with Bearer tokens. To authenticate:
-    1. Register a new account via `/signup`
-    2. Login via `/login` to get an access token
+
+    This API uses OAuth2 Bearer tokens issued via Google OAuth.
+    1. Frontend obtains a Google ID token
+    2. Exchange it at `/auth/google` to receive a JWT access token
     3. Include the token in the Authorization header: `Bearer {token}`
     
     ## Subscription Tiers
@@ -124,9 +124,11 @@ app = FastAPI(
     ],
 )
 
+# Restrictive CORS: allow frontend origin if provided, otherwise fallback to dev defaults
+allowed_origins = [config.FRONTEND_URL] if config.FRONTEND_URL else ["http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -406,6 +408,33 @@ if config.is_billing_enabled():
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
+    @app.post(
+        "/subscription/portal",
+        response_model=schemas.PortalSessionResponse,
+        tags=["subscription"],
+    )
+    def create_portal_session(
+        user: models.User = Depends(auth.get_current_user),
+        db: Session = Depends(get_db),
+    ):
+        """
+        Create a billing portal session for the authenticated user.
+        """
+        if not user.lemonsqueezy_customer_id:
+            # Best-effort auto-create a customer record
+            customer_id = LemonSqueezyService.create_customer(user.email, user.name or "")
+            if not customer_id:
+                raise HTTPException(status_code=500, detail="Unable to create customer")
+            user.lemonsqueezy_customer_id = customer_id
+            db.commit()
+
+        portal_url = LemonSqueezyService.create_portal_url(
+            user.lemonsqueezy_customer_id, return_url=f"{config.FRONTEND_URL}/dashboard"
+        )
+        if not portal_url:
+            raise HTTPException(status_code=500, detail="Unable to create portal session")
+        return {"portal_url": portal_url}
+
 else:
 
     @app.post(
@@ -629,6 +658,9 @@ def list_incidents(
     project_id: int,
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user),
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of records to return"),
+    sort_desc: bool = Query(True, description="Sort by newest first"),
 ):
     """
     List all incidents for a specific project.
@@ -643,9 +675,12 @@ def list_incidents(
     # Check if user has access to the project
     require_project_access(user, project_id, "read", db)
 
-    return (
-        db.query(models.Incident).filter(models.Incident.project_id == project_id).all()
-    )
+    query = db.query(models.Incident).filter(models.Incident.project_id == project_id)
+    if sort_desc:
+        query = query.order_by(models.Incident.created_at.desc())
+    else:
+        query = query.order_by(models.Incident.created_at.asc())
+    return query.offset(skip).limit(limit).all()
 
 
 @app.post(
@@ -722,6 +757,9 @@ def list_project_incidents(
     project_id: int,
     db: Session = Depends(get_db),
     user: models.User = Depends(auth.get_current_user),
+    skip: int = Query(0, ge=0, description="Number of records to skip for pagination"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of records to return"),
+    sort_desc: bool = Query(True, description="Sort by newest first"),
 ):
     """
     Get all incidents for a specific project.
@@ -737,14 +775,12 @@ def list_project_incidents(
     """
     require_project_access(user, project_id, "read", db)
 
-    incidents = (
-        db.query(models.Incident)
-        .filter(models.Incident.project_id == project_id)
-        .order_by(models.Incident.created_at.desc())
-        .all()
-    )
-
-    return incidents
+    query = db.query(models.Incident).filter(models.Incident.project_id == project_id)
+    if sort_desc:
+        query = query.order_by(models.Incident.created_at.desc())
+    else:
+        query = query.order_by(models.Incident.created_at.asc())
+    return query.offset(skip).limit(limit).all()
 
 
 # Group Management Endpoints
