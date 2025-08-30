@@ -117,6 +117,25 @@ class TestAdditionalEndpoints:
 
         db.close()
 
+    def test_expired_token_returns_unauthorized(self):
+        """Test that an expired token yields 401 on protected endpoints."""
+        db = TestingSessionLocal()
+
+        # Create user
+        user = create_test_user(email="expired@example.com")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        # Create already expired token
+        token = create_access_token({"sub": user.email}, expires_in_seconds=-5)
+
+        # Call a protected route
+        response = client.get("/projects/", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 401
+
+        db.close()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

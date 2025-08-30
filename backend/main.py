@@ -271,6 +271,7 @@ def get_config():
             "subscription_management": config.is_billing_enabled(),
             "billing_webhooks": config.is_billing_enabled(),
             "subscription_limits": config.is_billing_enabled(),
+            "admin_enabled": config.ENABLE_ADMIN,
         },
     }
 
