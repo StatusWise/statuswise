@@ -161,6 +161,15 @@ def get_db():
         db.close()
 
 
+def require_admin_feature_enabled():
+    """Dependency that ensures admin features are enabled."""
+    if not config.ENABLE_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Admin functionality is disabled",
+        )
+
+
 @app.post("/auth/google", response_model=schemas.AuthResponse, tags=["authentication"])
 def google_auth(auth_request: schemas.GoogleAuthRequest, db: Session = Depends(get_db)):
     """
@@ -1005,6 +1014,7 @@ def respond_to_group_invitation(
 def get_admin_stats(
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get system-wide statistics for admin dashboard.
@@ -1057,6 +1067,7 @@ def get_admin_users(
     limit: int = Query(100, ge=1, description="Maximum number of records to return"),
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all users for admin management.
@@ -1090,6 +1101,7 @@ def get_admin_subscriptions(
     limit: int = Query(100, ge=1, description="Maximum number of records to return"),
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all subscriptions for admin management.
@@ -1131,6 +1143,7 @@ def get_admin_projects(
     limit: int = Query(100, ge=1, description="Maximum number of records to return"),
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all projects for admin management.
@@ -1183,6 +1196,7 @@ def get_admin_user(
     user_id: int = Path(..., gt=0, description="ID of the user to retrieve"),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get detailed information about a specific user.
@@ -1214,6 +1228,7 @@ def update_admin_user(
     is_admin: Optional[bool] = None,
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Update user administrative settings.
@@ -1264,6 +1279,7 @@ def get_admin_incidents(
     resolved: Optional[bool] = None,
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all incidents for admin oversight.
@@ -1300,6 +1316,7 @@ def get_admin_incidents(
 def get_admin_group_stats(
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get group management statistics for admin dashboard.
@@ -1320,6 +1337,7 @@ def get_admin_groups(
     include_inactive: bool = Query(False, description="Include inactive groups"),
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all groups for admin oversight.
@@ -1403,6 +1421,7 @@ def get_admin_invitations(
     ),
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    _admin_enabled: None = Depends(require_admin_feature_enabled),
 ):
     """
     Get all group invitations for admin oversight.

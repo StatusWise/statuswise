@@ -69,6 +69,25 @@ class TestAdditionalEndpoints:
             422,
         ]  # Invalid token, but endpoint exists
 
+    def test_admin_endpoints_return_404_when_disabled(self):
+        """Admin endpoints should be hidden (404) when admin is disabled."""
+        # Ensure admin disabled for this test process
+        os.environ["ENABLE_ADMIN"] = "false"
+
+        # Even with a valid admin token, route should be 404 when disabled
+        db = TestingSessionLocal()
+        user = create_test_user(email="admin@example.com", is_admin=True)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        token = create_access_token({"sub": user.email})
+
+        response = client.get("/admin/stats", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 404
+
+        db.close()
+
     def test_protected_endpoint_requires_auth(self):
         """Test that protected endpoints require authentication."""
         response = client.get("/projects/")
