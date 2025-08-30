@@ -928,6 +928,17 @@ def delete_group(
 # Group Member Management
 
 
+@app.delete("/groups/{group_id}/members/me", tags=["groups"])
+def leave_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(auth.get_current_user),
+):
+    """Leave a group (non-owners only)."""
+    GroupService.leave_group(group_id, user, db)
+    return {"message": "Left group successfully"}
+
+
 @app.patch(
     "/groups/{group_id}/members/{member_id}",
     response_model=schemas.GroupMemberOut,
