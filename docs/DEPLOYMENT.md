@@ -8,14 +8,14 @@ For the easiest deployment experience, you can use the pre-built Docker images:
 
 ### Prerequisites
 - Docker and Docker Compose installed
-- Google OAuth credentials ([setup guide](GOOGLE_OAUTH_SETUP.md))
+- Google OAuth credentials ([setup guide](../GOOGLE_OAUTH_SETUP.md))
 
 ### Steps
 
 1. **Download the production compose file**:
    ```bash
-   curl -O https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/statuswise/main/docker-compose.yml
-   curl -O https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/statuswise/main/env.prod.example
+   curl -O https://raw.githubusercontent.com/NicklausVega/statuswise/main/docker-compose.yml
+   curl -O https://raw.githubusercontent.com/NicklausVega/statuswise/main/env.prod.example
    ```
 
 2. **Configure environment**:
@@ -26,7 +26,7 @@ For the easiest deployment experience, you can use the pre-built Docker images:
 
 3. **Deploy**:
    ```bash
-   docker-compose -f docker-compose.yml up -d
+   docker-compose up -d
    ```
 
 4. **Access the application**:
@@ -76,7 +76,7 @@ If you want to develop or customize StatusWise:
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/YOUR_GITHUB_USERNAME/statuswise.git
+   git clone https://github.com/NicklausVega/statuswise.git
    cd statuswise
    ```
 
@@ -96,7 +96,7 @@ If you want to develop or customize StatusWise:
 
 ### Using Docker Images (Recommended)
 
-1. Use the `docker-compose.prod.yml` file as shown in the Quick Deploy section
+1. Use the `docker-compose.yml` file as shown in the Quick Deploy section
 2. Update the image names in the compose file to match your repository
 3. Configure proper domain names and SSL certificates
 4. Set up proper backup procedures for the database volume
@@ -132,10 +132,10 @@ To update to the latest version:
 
 ```bash
 # Pull latest images
-docker-compose -f docker-compose.prod.yml pull
+docker-compose pull
 
 # Restart services
-docker-compose -f docker-compose.prod.yml up -d
+docker-compose up -d
 ```
 
 ## Troubleshooting
@@ -159,7 +159,7 @@ For production deployments, you'll want to expose your application securely thro
 
 ### Cloudflare Tunnels (Recommended)
 
-Cloudflare Tunnels provide secure, encrypted connections without opening ports on your firewall and include automatic SSL certificates.
+Cloudflare Tunnels provide secure, encrypted connections without opening ports on your firewall and include automatic SSL certificates. We'll use the Zero Trust dashboard for the easiest setup experience.
 
 #### Prerequisites
 - Cloudflare account
@@ -167,45 +167,47 @@ Cloudflare Tunnels provide secure, encrypted connections without opening ports o
 
 #### Setup Steps
 
-1. **Install cloudflared**:
-   ```bash
-   # Linux/macOS
-   curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-   sudo dpkg -i cloudflared.deb
+1. **Access Zero Trust Dashboard**:
+   - Go to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
+   - Navigate to **Access** → **Tunnels**
+
+2. **Create a New Tunnel**:
+   - Click **Create a tunnel**
+   - Choose **Cloudflared** as the connector type
+   - Name your tunnel (e.g., `statuswise`)
+   - Click **Save tunnel**
+
+3. **Install the Connector**:
+   - The dashboard will show installation commands for your OS
+   - **Linux**:
+     ```bash
+     curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+     sudo dpkg -i cloudflared.deb
+     sudo cloudflared service install [your-token-from-dashboard]
+     ```
+   - **macOS**:
+     ```bash
+     brew install cloudflared
+     sudo cloudflared service install [your-token-from-dashboard]
+     ```
+   - **Windows**: Download the installer from the dashboard
+   - **Docker**:
+     ```bash
+     docker run cloudflare/cloudflared:latest tunnel --no-autoupdate run --token [your-token-from-dashboard]
+     ```
+
+4. **Configure Public Hostnames**:
+   In the Zero Trust dashboard, add these routes:
    
-   # Or use package manager
-   # Ubuntu/Debian: sudo apt install cloudflared
-   # macOS: brew install cloudflared
-   # Windows: Download from GitHub releases
-   ```
-
-2. **Authenticate with Cloudflare**:
-   ```bash
-   cloudflared tunnel login
-   ```
-
-3. **Create a tunnel**:
-   ```bash
-   cloudflared tunnel create statuswise
-   ```
-
-4. **Create tunnel configuration** (`~/.cloudflared/config.yml`):
-   ```yaml
-   tunnel: statuswise
-   credentials-file: /home/user/.cloudflared/<tunnel-id>.json
+   **Route 1 (Frontend)**:
+   - **Public hostname**: `statuswise.yourdomain.com`
+   - **Service**: `http://localhost:3000`
+   - **Additional application settings**: None needed
    
-   ingress:
-     # Main application
-     - hostname: statuswise.yourdomain.com
-       service: http://localhost:3000
-     
-     # API endpoint
-     - hostname: api.statuswise.yourdomain.com
-       service: http://localhost:8000
-     
-     # Catch-all rule (required)
-     - service: http_status:404
-   ```
+   **Route 2 (API)**:
+   - **Public hostname**: `api.statuswise.yourdomain.com`
+   - **Service**: `http://localhost:8000`
+   - **Additional application settings**: None needed
 
 5. **Update your environment variables**:
    ```bash
@@ -214,22 +216,45 @@ Cloudflare Tunnels provide secure, encrypted connections without opening ports o
    NEXT_PUBLIC_API_URL=https://api.statuswise.yourdomain.com
    ```
 
-6. **Create DNS records**:
+6. **Start your application**:
    ```bash
-   cloudflared tunnel route dns statuswise statuswise.yourdomain.com
-   cloudflared tunnel route dns statuswise api.statuswise.yourdomain.com
+   docker-compose up -d
    ```
 
-7. **Run the tunnel**:
-   ```bash
-   # Test first
-   cloudflared tunnel run statuswise
-   
-   # Install as service (recommended)
-   sudo cloudflared service install
-   sudo systemctl start cloudflared
-   sudo systemctl enable cloudflared
-   ```
+7. **Verify the tunnel**:
+   - Check tunnel status in the Zero Trust dashboard
+   - Visit your configured hostnames
+   - DNS records are automatically created by Cloudflare
+
+#### Alternative: CLI Method (Advanced Users)
+
+If you prefer command-line setup:
+
+```bash
+# Install cloudflared
+curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared.deb
+
+# Authenticate and create tunnel
+cloudflared tunnel login
+cloudflared tunnel create statuswise
+
+# Create config file (~/.cloudflared/config.yml)
+tunnel: statuswise
+credentials-file: /home/user/.cloudflared/<tunnel-id>.json
+
+ingress:
+  - hostname: statuswise.yourdomain.com
+    service: http://localhost:3000
+  - hostname: api.statuswise.yourdomain.com
+    service: http://localhost:8000
+  - service: http_status:404
+
+# Create DNS records and run
+cloudflared tunnel route dns statuswise statuswise.yourdomain.com
+cloudflared tunnel route dns statuswise api.statuswise.yourdomain.com
+cloudflared tunnel run statuswise
+```
 
 #### Cloudflare Tunnel Benefits
 - ✅ Automatic SSL certificates

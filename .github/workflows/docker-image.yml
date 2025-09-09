@@ -33,48 +33,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Create environment files
-      run: |
-        # Create backend .env file with minimal required values
-        cp backend/env.example backend/.env
-        
-        # Update backend .env with safe defaults for building
-        sed -i 's|DATABASE_URL=postgresql://postgres:postgres@localhost:5432/statuswise|DATABASE_URL=postgresql://postgres:postgres@db:5432/statuswise|g' backend/.env
-        sed -i 's|your-secret-key-here|build-secret-key|g' backend/.env
-        sed -i 's|your-jwt-secret-here|build-jwt-secret|g' backend/.env
-        sed -i 's|your-google-client-id-here|build-google-client-id|g' backend/.env
-        sed -i 's|your-google-client-secret-here|build-google-client-secret|g' backend/.env
-        
-        # Create frontend .env file
-        cp frontend/env.example frontend/.env
-        sed -i 's|NEXT_PUBLIC_API_URL=http://localhost:8000|NEXT_PUBLIC_API_URL=http://backend:8000|g' frontend/.env
-        sed -i 's|your-google-client-id-here|build-google-client-id|g' frontend/.env
-
-    - name: Build with docker-compose
-      run: |
-        docker-compose build
-
-    - name: Test docker-compose services
-      run: |
-        # Start services in background
-        docker-compose up -d
-        
-        # Wait for services to be ready
-        echo "Waiting for services to start..."
-        sleep 30
-        
-        # Check if services are running
-        docker-compose ps
-        
-        # Basic health checks
-        docker-compose logs backend
-        docker-compose logs frontend
-        
-        # Stop services
-        docker-compose down
-
     - name: Extract metadata for backend
-      if: github.event_name != 'pull_request'
       id: meta-backend
       uses: docker/metadata-action@v5
       with:
@@ -86,7 +45,6 @@ jobs:
           type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Extract metadata for frontend
-      if: github.event_name != 'pull_request'
       id: meta-frontend
       uses: docker/metadata-action@v5
       with:
@@ -98,22 +56,22 @@ jobs:
           type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push backend image
-      if: github.event_name != 'pull_request'
       uses: docker/build-push-action@v5
       with:
         context: ./backend
-        push: true
+        file: ./backend/Dockerfile
+        push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta-backend.outputs.tags }}
         labels: ${{ steps.meta-backend.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
     - name: Build and push frontend image
-      if: github.event_name != 'pull_request'
       uses: docker/build-push-action@v5
       with:
         context: ./frontend
-        push: true
+        file: ./frontend/Dockerfile
+        push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta-frontend.outputs.tags }}
         labels: ${{ steps.meta-frontend.outputs.labels }}
         cache-from: type=gha

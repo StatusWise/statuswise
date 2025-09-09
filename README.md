@@ -43,17 +43,11 @@ StatusWise is built with a modern, robust, and scalable technology stack.
 
 ---
 
-## 🚀 Quick Start (Self-Hosted)
+## 🚀 Quick Deploy (No Repository Clone Needed)
 
-Get your self-hosted StatusWise instance running in just a few steps.
+The fastest way to get StatusWise running using pre-built Docker images:
 
-**1. Clone the repository:**
-```bash
-git clone https://github.com/StatusWise/statuswise.git
-cd statuswise
-```
-
-**2. Set up Google OAuth:**
+**1. Set up Google OAuth:**
 
 Before running StatusWise, you need to set up Google OAuth:
 
@@ -62,20 +56,22 @@ Before running StatusWise, you need to set up Google OAuth:
 3. Enable the **Google+ API** or **Google Identity** API
 4. Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client IDs**
 5. Configure the OAuth consent screen
-6. Set **Authorized JavaScript origins**: `http://localhost:3000` (for development)
-7. Set **Authorized redirect URIs**: `http://localhost:3000` (for development)
+6. Set **Authorized JavaScript origins**: `http://localhost:3000`
+7. Set **Authorized redirect URIs**: `http://localhost:3000`
 8. Copy your **Client ID** and **Client Secret**
 
-**3. Set up environment variables:**
-
-Copy the example environment files and configure them with your Google OAuth credentials:
-
+**2. Download the deployment files:**
 ```bash
-cp backend/env.example backend/.env
-cp frontend/env.example frontend/.env
+curl -O https://raw.githubusercontent.com/NicklausVega/statuswise/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/NicklausVega/statuswise/main/env.prod.example
 ```
 
-**Edit `backend/.env`:**
+**3. Configure environment:**
+```bash
+cp env.prod.example .env
+```
+
+**Edit your `.env` file with your Google OAuth credentials:**
 ```bash
 # Required: Google OAuth
 GOOGLE_CLIENT_ID=your-google-client-id-here
@@ -84,27 +80,18 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret-here
 # Admin user (automatically becomes admin on first login)
 ADMIN_EMAIL=your-email@example.com
 
-# Database
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/statuswise
-
-# Security
-SECRET_KEY=your-secret-key-here
-JWT_SECRET=your-jwt-secret-here
+# Security (generate strong random strings)
+SECRET_KEY=your-super-secret-key-change-this
+JWT_SECRET=your-jwt-secret-change-this
 
 # Feature toggles
 ENABLE_BILLING=false
 ENABLE_ADMIN=true
 ```
 
-**Edit `frontend/.env`:**
+**4. Deploy with Docker Compose:**
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id-here
-```
-
-**4. Build and run with Docker Compose:**
-```bash
-docker compose up --build -d
+docker-compose up -d
 ```
 
 **5. Access your instance:**
@@ -117,6 +104,33 @@ docker compose up --build -d
 - Sign in with the Google account matching your `ADMIN_EMAIL`
 - You'll automatically be granted admin privileges
 - Access the admin dashboard to manage users and system settings
+
+> 🌐 **For Production Deployment**: See our [**Deployment Guide**](./docs/DEPLOYMENT.md) for production setup with reverse proxies, SSL certificates, and Cloudflare tunnels.
+
+---
+
+## 🛠 Development Setup (Clone Repository)
+
+For development or customization, you can clone the repository and build from source:
+
+**1. Clone the repository:**
+```bash
+git clone https://github.com/NicklausVega/statuswise.git
+cd statuswise
+```
+
+**2. Set up environment variables:**
+```bash
+cp backend/env.example backend/.env
+cp frontend/env.example frontend/.env
+```
+
+**3. Configure your environment files** (same as above)
+
+**4. Build and run:**
+```bash
+docker-compose up --build -d
+```
 
 ---
 
@@ -200,6 +214,7 @@ StatusWise is open-source and licensed under the **MIT License**.
 
 Comprehensive documentation for setup, configuration, and development can be found in the [`docs/`](./docs) directory:
 
+- [**Deployment Guide**](./docs/DEPLOYMENT.md) - Production deployment with reverse proxies (Cloudflare, nginx)
 - [**Feature Toggles**](./docs/FEATURE_TOGGLES.md) - Configure billing and admin features
 - [**Admin Dashboard**](./docs/ADMIN_DASHBOARD.md) - Admin interface setup and usage
 - [**Testing Guide**](./docs/TESTING.md) - Testing strategy and running tests
