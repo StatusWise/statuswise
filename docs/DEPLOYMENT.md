@@ -14,8 +14,8 @@ For the easiest deployment experience, you can use the pre-built Docker images:
 
 1. **Download the production compose file**:
    ```bash
-   curl -O https://raw.githubusercontent.com/NicklausVega/statuswise/main/docker-compose.yml
-   curl -O https://raw.githubusercontent.com/NicklausVega/statuswise/main/env.prod.example
+   curl -O https://raw.githubusercontent.com/StatusWise/statuswise/main/docker-compose.yml
+   curl -O https://raw.githubusercontent.com/StatusWise/statuswise/main/env.prod.example
    ```
 
 2. **Configure environment**:
@@ -76,7 +76,7 @@ If you want to develop or customize StatusWise:
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/NicklausVega/statuswise.git
+   git clone https://github.com/StatusWise/statuswise.git
    cd statuswise
    ```
 

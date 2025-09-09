@@ -1,6 +1,6 @@
 services:
   backend:
-    image: ghcr.io/NicklausVega/statuswise-backend:latest  # Update YOUR_GITHUB_USERNAME
+    image: ghcr.io/StatusWise/statuswise-backend:latest  # Update YOUR_GITHUB_USERNAME
     restart: unless-stopped
     environment:
       # Database configuration

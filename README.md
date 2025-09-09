@@ -62,8 +62,8 @@ Before running StatusWise, you need to set up Google OAuth:
 
 **2. Download the deployment files:**
 ```bash
-curl -O https://raw.githubusercontent.com/NicklausVega/statuswise/main/docker-compose.yml
-curl -O https://raw.githubusercontent.com/NicklausVega/statuswise/main/env.prod.example
+curl -O https://raw.githubusercontent.com/StatusWise/statuswise/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/StatusWise/statuswise/main/env.prod.example
 ```
 
 **3. Configure environment:**
@@ -115,7 +115,7 @@ For development or customization, you can clone the repository and build from so
 
 **1. Clone the repository:**
 ```bash
-git clone https://github.com/NicklausVega/statuswise.git
+git clone https://github.com/StatusWise/statuswise.git
 cd statuswise
 ```
 
