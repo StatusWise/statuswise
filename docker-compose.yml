@@ -1,37 +1,61 @@
-version: '3.9'
 services:
   backend:
-    build: ./backend
+    image: ghcr.io/NicklausVega/statuswise-backend:latest  # Update YOUR_GITHUB_USERNAME
     restart: unless-stopped
-    env_file:
-      - ./backend/.env
+    environment:
+      # Database configuration
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/statuswise
+      
+      # Required: Update these with your actual values
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-here}
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret-here}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-your-google-client-id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-your-google-client-secret}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@yourdomain.com}
+      
+      # Feature toggles
+      ENABLE_BILLING: ${ENABLE_BILLING:-false}
+      ENABLE_ADMIN: ${ENABLE_ADMIN:-true}
+      
+      # Optional: Lemon Squeezy (only if ENABLE_BILLING=true)
+      LEMONSQUEEZY_API_KEY: ${LEMONSQUEEZY_API_KEY:-}
+      LEMONSQUEEZY_STORE_ID: ${LEMONSQUEEZY_STORE_ID:-}
+      LEMONSQUEEZY_WEBHOOK_SECRET: ${LEMONSQUEEZY_WEBHOOK_SECRET:-}
+      LEMONSQUEEZY_PRO_VARIANT_ID: ${LEMONSQUEEZY_PRO_VARIANT_ID:-}
+      
+      # Frontend URL
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+
   frontend:
-    build: ./frontend
+    image: ghcr.io/YOUR_GITHUB_USERNAME/statuswise-frontend:latest  # Update YOUR_GITHUB_USERNAME
     restart: unless-stopped
-    env_file:
-      - ./frontend/.env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-your-google-client-id}
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - backend
+
   db:
     image: postgres:15
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: statuswise
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-statuswise}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
 
